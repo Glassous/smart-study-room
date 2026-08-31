@@ -1,0 +1,25 @@
+# Go
+backend/studyroom-server
+backend/bin/
+*.exe
+*.test
+*.out
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# 环境与日志
+.env
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# 本地临时
+tmp/
