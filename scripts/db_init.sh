@@ -16,9 +16,9 @@ echo "==> initdb 创建集群于 $PGDATA ..."
 initdb -D "$PGDATA" --encoding=UTF8 --locale=C.UTF-8
 
 echo "==> 启动集群 ..."
-pg_ctl -D "$PGDATA" -l "$PGDATA/server.log" -w start
+pg_ctl -D "$PGDATA" -l "$PGDATA/server.log" -w -o "-k /tmp" start
 
 echo "==> 创建数据库 $DBNAME ..."
-createdb -p "$PGPORT" "$DBNAME"
+createdb -h /tmp -p "$PGPORT" "$DBNAME"
 
 echo "完成。后续使用 ./scripts/db_start.sh / ./scripts/db_stop.sh 管理集群。"
