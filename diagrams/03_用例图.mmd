@@ -1,0 +1,50 @@
+%% 图 4-1 系统用例图（以 flowchart 形式表达 UML 用例关系）
+flowchart LR
+    Student([学生])
+    Admin([管理员])
+    Guest([游客])
+
+    subgraph System[智能共享自习室预约系统]
+        UC1([注册账号])
+        UC2([登录/注销])
+        UC3([查询座位平面图])
+        UC4([在线选座预约])
+        UC5([智能自动分配座位])
+        UC6([签到/临时离开/签退])
+        UC7([取消预约])
+        UC8([加入满座候补])
+        UC9([查看消息通知])
+        UC10([查询信用分与流水])
+        UC11([查看座位热力图])
+        UC12([管理自习室与座位])
+        UC13([用户管理])
+        UC14([查看运营统计报表])
+        UC15([查询个人候补队列])
+    end
+
+    Guest --> UC1
+    Guest --> UC2
+
+    Student --> UC2
+    Student --> UC3
+    Student --> UC4
+    Student --> UC5
+    Student --> UC6
+    Student --> UC7
+    Student --> UC8
+    Student --> UC9
+    Student --> UC10
+    Student --> UC11
+    Student --> UC15
+
+    Admin --> UC2
+    Admin --> UC11
+    Admin --> UC12
+    Admin --> UC13
+    Admin --> UC14
+
+    UC4 -.->|«include» 登录| UC2
+    UC5 -.->|«include» 登录| UC2
+    UC6 -.->|«include» 登录| UC2
+    UC8 -.->|«extend» 时段满座| UC4
+    UC5 -.->|«extend» 偏好提交| UC4

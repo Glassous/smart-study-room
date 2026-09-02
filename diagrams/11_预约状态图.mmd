@@ -1,0 +1,32 @@
+%% 图 4-5 预约状态图（全生命周期状态机）
+stateDiagram-v2
+    [*] --> pending : 创建预约<br/>(手动选座/智能分配/候补递补)
+
+    pending : 待签到
+    pending : 签到窗口 = 开始前15分钟 ~ 开始后15分钟
+
+    pending --> checked_in : 用户签到<br/>(窗口内)
+    pending --> cancelled : 用户取消<br/>(开始前30分钟外取消不扣分)
+    pending --> violation : 调度器判定超时未签到<br/>(信用 -8)
+
+    checked_in : 使用中
+    checked_in --> temp_leave : 临时离开
+    checked_in --> completed : 用户签退<br/>或到时自动结束<br/>(信用 +1)
+
+    temp_leave : 临时离开(≤30分钟)
+    temp_leave --> checked_in : 用户返回
+    temp_leave --> completed : 离开超时30分钟<br/>自动结束
+
+    cancelled : 已取消
+    violation : 已违约
+    completed : 已完成
+
+    cancelled --> [*]
+    completed --> [*]
+    violation --> [*]
+
+    note right of violation
+        违约处理: 释放座位时段
+        触发候补递补
+        发送违约警告通知
+    end note
