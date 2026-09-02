@@ -1,0 +1,35 @@
+%% 图 4-2 登录认证时序图
+sequenceDiagram
+    actor U as 学生/管理员
+    participant V as 前端(Vue)
+    participant A as AuthHandler
+    participant S as AuthService
+    participant R as UserRepository
+    participant DB as PostgreSQL
+
+    U->>V: 输入用户名/口令, 点击登录
+    V->>A: POST /api/auth/login
+    A->>S: Login(username, password)
+    S->>R: GetByUsername(username)
+    R->>DB: SELECT * FROM users WHERE username=$1
+    DB-->>R: 用户记录(含 password_hash)
+    R-->>S: 用户对象
+    alt 用户不存在
+        S-->>A: 错误: 用户名或口令错误
+        A-->>V: 401 凭证无效
+    else 口令校验
+        S->>S: bcrypt.Compare(password, hash)
+        alt 校验失败
+            S-->>A: 错误: 用户名或口令错误
+            A-->>V: 401 凭证无效
+        else 账号被禁用
+            S-->>A: 错误: 账号已禁用
+            A-->>V: 403 账号禁用
+        else 校验通过
+            S->>S: 签发 JWT(HS256, 24h, 含 id/role)
+            S-->>A: 令牌 + 用户公开信息
+            A-->>V: 200 {token, user}
+            V->>V: localStorage 持久化令牌
+            V-->>U: 跳转首页, 显示角色菜单
+        end
+    end
