@@ -27,6 +27,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	creditRepo := repository.NewCreditRepo(pool)
 	notificationRepo := repository.NewNotificationRepo(pool)
 	waitlistRepo := repository.NewWaitlistRepo(pool)
+	statsRepo := repository.NewStatsRepo(pool)
 
 	// 服务层
 	authService := service.NewAuthService(userRepo, cfg)
@@ -38,6 +39,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	lifecycleService.SetHooks(service.NewCompositeHooks(creditService, notificationService)) // 违约扣分+警告通知 / 履约加分
 	allocationService := service.NewAllocationService(seatRepo, roomRepo, userRepo, reservationRepo, reservationService)
 	waitlistService := service.NewWaitlistService(waitlistRepo, seatRepo, reservationRepo, reservationService, notificationService)
+	statsService := service.NewStatsService(statsRepo, seatRepo, roomRepo)
 
 	// 处理层
 	health := handler.NewHealthHandler(pool)
@@ -49,6 +51,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	credit := handler.NewCreditHandler(creditService)
 	notify := handler.NewNotificationHandler(notificationService)
 	waitlist := handler.NewWaitlistHandler(waitlistService)
+	stats := handler.NewStatsHandler(statsService)
 
 	api := r.Group("/api")
 	{
@@ -87,6 +90,14 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 				waitlistGroup.POST("", waitlist.Join)
 				waitlistGroup.GET("/mine", waitlist.ListMine)
 				waitlistGroup.POST("/:id/cancel", waitlist.Cancel)
+			}
+			statsGroup := authorized.Group("/stats")
+			{
+				statsGroup.GET("/heatmap", stats.Heatmap)
+				statsGroup.GET("/trend", stats.Trend)
+				statsGroup.GET("/peak", stats.Peak)
+				statsGroup.GET("/top-seats", stats.TopSeats)
+				statsGroup.GET("/overview", stats.Overview)
 			}
 		}
 
