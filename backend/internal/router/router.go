@@ -24,12 +24,15 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	roomRepo := repository.NewRoomRepo(pool)
 	seatRepo := repository.NewSeatRepo(pool)
 	reservationRepo := repository.NewReservationRepo(pool)
+	creditRepo := repository.NewCreditRepo(pool)
 
 	// 服务层
 	authService := service.NewAuthService(userRepo, cfg)
 	seatService := service.NewSeatService(roomRepo, seatRepo)
-	reservationService := service.NewReservationService(reservationRepo, roomRepo, seatRepo, userRepo)
+	creditService := service.NewCreditService(creditRepo, userRepo)
+	reservationService := service.NewReservationService(reservationRepo, roomRepo, seatRepo, userRepo, creditService)
 	lifecycleService := service.NewLifecycleService(reservationRepo)
+	lifecycleService.SetHooks(creditService) // 违约扣分/履约加分自动联动
 	allocationService := service.NewAllocationService(seatRepo, roomRepo, userRepo, reservationRepo, reservationService)
 
 	// 处理层
@@ -39,6 +42,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	adminRoom := handler.NewAdminRoomHandler(seatService)
 	reservation := handler.NewReservationHandler(reservationService, lifecycleService)
 	allocation := handler.NewAllocationHandler(allocationService)
+	credit := handler.NewCreditHandler(creditService)
 
 	api := r.Group("/api")
 	{
@@ -64,6 +68,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 			authorized.POST("/reservations/:id/leave", reservation.Leave)
 			authorized.POST("/reservations/:id/return", reservation.ReturnBack)
 			authorized.POST("/reservations/:id/checkout", reservation.Checkout)
+			authorized.GET("/credit", credit.Overview)
 		}
 
 		// 管理端: 房间/座位维护(仅 admin)
