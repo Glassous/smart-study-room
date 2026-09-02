@@ -1,0 +1,82 @@
+%% 图 5-1 实体联系图（ER 图）
+erDiagram
+    USERS ||--o{ RESERVATIONS : "发起"
+    SEATS ||--o{ RESERVATIONS : "被预约"
+    ROOMS ||--o{ SEATS : "包含(级联删除)"
+    USERS ||--o{ CREDIT_LOGS : "产生"
+    RESERVATIONS ||--o{ CREDIT_LOGS : "触发"
+    USERS ||--o{ WAITLIST : "排队"
+    ROOMS ||--o{ WAITLIST : "面向"
+    USERS ||--o{ NOTIFICATIONS : "接收"
+
+    USERS {
+        bigint id PK
+        varchar username UK
+        varchar password_hash
+        varchar real_name
+        varchar student_no UK
+        varchar role "student/admin"
+        int credit_score "0-100 默认100"
+        timestamptz credit_banned_until "禁约截止"
+        varchar status "active/disabled"
+    }
+    ROOMS {
+        bigint id PK
+        varchar name UK
+        varchar location
+        time open_time
+        time close_time
+        int seat_rows
+        int seat_cols
+    }
+    SEATS {
+        bigint id PK
+        bigint room_id FK
+        varchar seat_no "房间内唯一"
+        int row_no
+        int col_no
+        varchar zone "quiet/regular/discussion/computer"
+        boolean has_power
+        boolean near_window
+        varchar status "available/maintenance/disabled"
+    }
+    RESERVATIONS {
+        bigint id PK
+        bigint user_id FK
+        bigint seat_id FK
+        date res_date
+        time start_time
+        time end_time
+        varchar status "六态状态机"
+        varchar source "manual/auto/waitlist"
+        timestamptz checkin_at
+        timestamptz checkout_at
+        timestamptz leave_at
+    }
+    CREDIT_LOGS {
+        bigint id PK
+        bigint user_id FK
+        int delta "正加负减"
+        varchar reason
+        bigint reservation_id FK
+    }
+    WAITLIST {
+        bigint id PK
+        bigint user_id FK
+        bigint room_id FK
+        date res_date
+        time start_time
+        time end_time
+        varchar zone "偏好可空"
+        boolean has_power
+        boolean near_window
+        varchar status "waiting/promoted/cancelled/expired"
+    }
+    NOTIFICATIONS {
+        bigint id PK
+        bigint user_id FK
+        varchar type "六类事件"
+        varchar title
+        text content
+        boolean is_read
+    }
