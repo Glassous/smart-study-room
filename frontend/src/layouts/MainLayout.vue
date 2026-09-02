@@ -10,6 +10,7 @@ const auth = useAuthStore()
 // 菜单随迭代补充: 预约/我的预约/热力图/消息/个人中心/管理端
 const menus = computed(() => {
   const items = [
+    { index: '/booking', title: '座位预约', icon: 'Seat' },
     { index: '/', title: '首页', icon: 'HomeFilled' }
   ]
   if (auth.isAdmin) {
