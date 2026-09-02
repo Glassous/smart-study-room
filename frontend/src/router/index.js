@@ -36,6 +36,12 @@ const routes = [
         name: 'waitlist',
         component: () => import('../views/WaitlistView.vue'),
         meta: { title: '我的候补', requiresAuth: true }
+      },
+      {
+        path: '/analytics',
+        name: 'analytics',
+        component: () => import('../views/AnalyticsView.vue'),
+        meta: { title: '热力图与统计', requiresAuth: true }
       }
     ]
   }
