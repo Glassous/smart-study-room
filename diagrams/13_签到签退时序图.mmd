@@ -1,0 +1,47 @@
+%% 图 3-2 签到签退时序图
+sequenceDiagram
+    actor U as 学生
+    participant V as 前端
+    participant RH as ReservationHandler
+    participant LS as LifecycleService
+    participant RR as ReservationRepo
+    participant HK as CompositeHooks<br/>(信用+通知)
+    participant DB as PostgreSQL
+
+    U->>V: 点击「签到」
+    V->>RH: POST /api/reservations/:id/checkin
+    RH->>LS: Checkin(uid, id)
+    LS->>RR: GetByID(id)
+    RR->>DB: SELECT ... WHERE id=$1
+    DB-->>RR: 预约记录
+    RR-->>LS: Reservation
+    LS->>LS: 校验: 本人? pending?<br/>now ∈ [开始-15m, 开始+15m]?
+    alt 校验失败
+        LS-->>RH: 错误(403/409/400)
+        RH-->>V: 错误响应
+    else 校验通过
+        LS->>RR: UpdateStatus(pending→checked_in, checkin_at=now)
+        RR->>DB: UPDATE ... WHERE status='pending'
+        DB-->>RR: 生效
+        RR-->>LS: true
+        LS-->>RH: 成功
+        RH-->>V: {action: checked_in}
+        V-->>U: 状态更新为「使用中」
+    end
+
+    U->>V: 学习结束点击「签退」
+    V->>RH: POST /api/reservations/:id/checkout
+    RH->>LS: Checkout(uid, id)
+    LS->>RR: UpdateStatus(checked_in→completed, checkout_at=now)
+    RR->>DB: UPDATE ... WHERE status IN ('checked_in','temp_leave')
+    DB-->>RR: 生效
+    LS->>HK: OnComplete(res)
+    par 信用加分
+        HK->>DB: 事务: credit +1 + 流水
+    and 违约场景对照(超时未签到时)
+        HK->>DB: 事务: credit -8 + 流水 + 禁约判断
+        HK->>DB: INSERT violation 通知
+    end
+    LS-->>RH: 成功
+    RH-->>V: {action: completed}
+    V-->>U: 显示「已完成」, 信用分+1
