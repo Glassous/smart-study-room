@@ -54,6 +54,12 @@ const routes = [
         name: 'profile',
         component: () => import('../views/ProfileView.vue'),
         meta: { title: '个人中心', requiresAuth: true }
+      },
+      {
+        path: '/admin',
+        name: 'admin',
+        component: () => import('../views/admin/AdminView.vue'),
+        meta: { title: '管理端', requiresAuth: true, requiresAdmin: true }
       }
     ]
   }
