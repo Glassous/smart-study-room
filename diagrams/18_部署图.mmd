@@ -1,0 +1,19 @@
+%% 图 9-1 系统部署图（以 flowchart 模拟 UML 部署图）
+flowchart LR
+    subgraph DEV[开发/演示部署环境 WSL2 Linux]
+        subgraph NODE1[应用服务器节点]
+            BE[studyroom-server<br/>Go 静态编译二进制<br/>:8080]
+            FE[静态资源<br/>前端 dist 或 Vite dev :5173]
+            SCRIPT[scripts/*<br/>db_init/start/stop<br/>migrations/seed]
+        end
+        subgraph NODE2[数据库节点 同机]
+            PG[(PostgreSQL 18<br/>用户级集群 ~/pgdata-studyroom<br/>:5432, socket /tmp<br/>库 studyroom)]
+        end
+        GH[GitHub 远程仓库<br/>main + feature 分支<br/>Actions CI]
+    end
+
+    USER[学生/管理员<br/>浏览器] -->|HTTP :5173| FE
+    FE -->|REST API :8080| BE
+    BE -->|pgx / TCP :5432| PG
+    SCRIPT --> PG
+    GH -.->|推送/CI| NODE1

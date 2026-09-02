@@ -1,0 +1,35 @@
+%% 图 3-3 后端模块结构图
+flowchart TD
+    MAIN[cmd/server<br/>服务入口] --> CFG[internal/config<br/>配置加载]
+    MAIN --> RTR[internal/router<br/>路由组装]
+    MAIN --> SCHD[internal/service/scheduler<br/>周期调度器]
+
+    RTR --> H1[handler/auth]
+    RTR --> H2[handler/room_seat]
+    RTR --> H3[handler/reservation]
+    RTR --> H4[handler/waitlist]
+    RTR --> H5[handler/notification]
+    RTR --> H6[handler/stats]
+    RTR --> H7[handler/admin]
+    RTR --> H8[handler/health]
+    RTR --> MW[internal/middleware<br/>CORS/JWT/RBAC]
+
+    H1 --> S1[service/auth<br/>注册登录会话]
+    H2 --> S2[service/seat<br/>房间座位管理]
+    H3 --> S3[service/reservation<br/>预约核心]
+    H3 --> S4[service/allocation<br/>自动分配算法]
+    H3 --> S5[service/lifecycle<br/>状态机流转]
+    H4 --> S7[service/waitlist<br/>候补队列]
+    H5 --> S8[service/notification<br/>消息通知]
+    H6 --> S9[service/stats<br/>统计分析]
+    H7 --> S2
+    H7 --> S10[service/admin<br/>用户管理]
+
+    S3 --> S6[service/credit<br/>信用规则]
+    S5 --> S6
+    S7 --> S3
+    S1 & S2 & S3 & S6 & S7 & S8 & S9 & S10 --> RP1[repository/*<br/>参数化数据访问]
+    RP1 --> DB[(PostgreSQL)]
+
+    classDef person fill:#e8f4ff,stroke:#5b9bd5
+    class S4,S5,S6 person

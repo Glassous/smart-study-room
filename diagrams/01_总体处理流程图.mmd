@@ -1,0 +1,33 @@
+%% 图 3-1 总体处理流程图
+flowchart TD
+    subgraph Client[客户端层]
+        BR[浏览器<br/>Vue3 SPA]
+    end
+
+    subgraph Gateway[接入层 Gin]
+        RT[路由分发]
+        MW1[CORS 中间件]
+        MW2[JWT 认证中间件]
+        MW3[RBAC 角色控制]
+    end
+
+    subgraph Business[业务服务层]
+        H[Handler 参数解析与响应]
+        SV[Service 业务规则<br/>冲突检测/评分/状态机/信用]
+        SCH[调度器 60s 周期<br/>违约扫描/候补递补/签到提醒]
+    end
+
+    subgraph Data[数据访问层]
+        REPO[Repository 参数化 SQL]
+        PG[(PostgreSQL 18<br/>排除约束兜底)]
+    end
+
+    BR -->|HTTP/JSON + Bearer| RT
+    RT --> MW1 --> MW2 --> MW3 --> H
+    H --> SV
+    SV --> REPO
+    SCH --> SV
+    REPO --> PG
+    PG --> REPO
+    SV --> H
+    H -->|统一响应| BR
