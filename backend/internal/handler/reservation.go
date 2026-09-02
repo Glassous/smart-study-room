@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -14,11 +15,12 @@ import (
 
 // ReservationHandler 预约接口
 type ReservationHandler struct {
-	res *service.ReservationService
+	res  *service.ReservationService
+	life *service.LifecycleService
 }
 
-func NewReservationHandler(res *service.ReservationService) *ReservationHandler {
-	return &ReservationHandler{res: res}
+func NewReservationHandler(res *service.ReservationService, life *service.LifecycleService) *ReservationHandler {
+	return &ReservationHandler{res: res, life: life}
 }
 
 // Create POST /api/reservations
@@ -59,6 +61,39 @@ func (h *ReservationHandler) ListMine(c *gin.Context) {
 	ok(c, list)
 }
 
+// Checkin POST /api/reservations/:id/checkin
+func (h *ReservationHandler) Checkin(c *gin.Context) {
+	h.lifecycleAction(c, h.life.Checkin, "checked_in")
+}
+
+// Leave POST /api/reservations/:id/leave
+func (h *ReservationHandler) Leave(c *gin.Context) {
+	h.lifecycleAction(c, h.life.Leave, "temp_leave")
+}
+
+// ReturnBack POST /api/reservations/:id/return
+func (h *ReservationHandler) ReturnBack(c *gin.Context) {
+	h.lifecycleAction(c, h.life.ReturnBack, "checked_in")
+}
+
+// Checkout POST /api/reservations/:id/checkout
+func (h *ReservationHandler) Checkout(c *gin.Context) {
+	h.lifecycleAction(c, h.life.Checkout, "completed")
+}
+
+func (h *ReservationHandler) lifecycleAction(
+	c *gin.Context,
+	fn func(ctx context.Context, uid, id int64) error,
+	action string,
+) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := fn(c.Request.Context(), middleware.CurrentUID(c), id); err != nil {
+		respondResError(c, err)
+		return
+	}
+	ok(c, gin.H{"id": id, "action": action})
+}
+
 // 预约错误统一映射
 func respondResError(c *gin.Context, err error) {
 	switch {
@@ -81,6 +116,9 @@ func respondResError(c *gin.Context, err error) {
 		fail(c, http.StatusForbidden, err.Error())
 	case errors.Is(err, service.ErrInvalidState):
 		fail(c, http.StatusConflict, err.Error())
+	case errors.Is(err, service.ErrNotInCheckinWindow),
+		errors.Is(err, service.ErrLeaveTimeout):
+		fail(c, http.StatusBadRequest, err.Error())
 	default:
 		fail(c, http.StatusInternalServerError, "服务内部错误")
 	}
