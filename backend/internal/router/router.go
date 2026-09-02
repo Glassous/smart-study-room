@@ -25,14 +25,16 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	seatRepo := repository.NewSeatRepo(pool)
 	reservationRepo := repository.NewReservationRepo(pool)
 	creditRepo := repository.NewCreditRepo(pool)
+	notificationRepo := repository.NewNotificationRepo(pool)
 
 	// 服务层
 	authService := service.NewAuthService(userRepo, cfg)
 	seatService := service.NewSeatService(roomRepo, seatRepo)
 	creditService := service.NewCreditService(creditRepo, userRepo)
-	reservationService := service.NewReservationService(reservationRepo, roomRepo, seatRepo, userRepo, creditService)
+	notificationService := service.NewNotificationService(notificationRepo)
+	reservationService := service.NewReservationService(reservationRepo, roomRepo, seatRepo, userRepo, creditService, notificationService)
 	lifecycleService := service.NewLifecycleService(reservationRepo)
-	lifecycleService.SetHooks(creditService) // 违约扣分/履约加分自动联动
+	lifecycleService.SetHooks(service.NewCompositeHooks(creditService, notificationService)) // 违约扣分+警告通知 / 履约加分
 	allocationService := service.NewAllocationService(seatRepo, roomRepo, userRepo, reservationRepo, reservationService)
 
 	// 处理层
@@ -43,6 +45,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	reservation := handler.NewReservationHandler(reservationService, lifecycleService)
 	allocation := handler.NewAllocationHandler(allocationService)
 	credit := handler.NewCreditHandler(creditService)
+	notify := handler.NewNotificationHandler(notificationService)
 
 	api := r.Group("/api")
 	{
@@ -69,6 +72,13 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 			authorized.POST("/reservations/:id/return", reservation.ReturnBack)
 			authorized.POST("/reservations/:id/checkout", reservation.Checkout)
 			authorized.GET("/credit", credit.Overview)
+			notifyGroup := authorized.Group("/notifications")
+			{
+				notifyGroup.GET("", notify.List)
+				notifyGroup.GET("/unread_count", notify.UnreadCount)
+				notifyGroup.POST("/:id/read", notify.MarkRead)
+				notifyGroup.POST("/read_all", notify.MarkAllRead)
+			}
 		}
 
 		// 管理端: 房间/座位维护(仅 admin)

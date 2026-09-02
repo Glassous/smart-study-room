@@ -38,6 +38,7 @@ type ReservationService struct {
 	seats        *repository.SeatRepo
 	users        *repository.UserRepo
 	credit       *CreditService
+	notifier     *NotificationService
 }
 
 func NewReservationService(
@@ -46,8 +47,10 @@ func NewReservationService(
 	seats *repository.SeatRepo,
 	users *repository.UserRepo,
 	credit *CreditService,
+	notifier *NotificationService,
 ) *ReservationService {
-	return &ReservationService{reservations: reservations, rooms: rooms, seats: seats, users: users, credit: credit}
+	return &ReservationService{reservations: reservations, rooms: rooms, seats: seats,
+		users: users, credit: credit, notifier: notifier}
 }
 
 // validateSlot 校验时段格式/粒度/时长
@@ -147,6 +150,15 @@ func (s *ReservationService) CreateWithSource(ctx context.Context, userID int64,
 			return nil, ErrSeatConflict
 		}
 		return nil, err
+	}
+	// 预约成功通知(降级: 失败不阻断)
+	if s.notifier != nil {
+		view, verr := s.reservations.GetView(ctx, res.ID)
+		if verr == nil {
+			s.notifier.Push(ctx, userID, model.NotifyReservationSuccess, "预约成功",
+				"您已成功预约 "+view.RoomName+" "+view.SeatNo+
+					" 座位（"+req.Date+" "+req.StartTime+"-"+req.EndTime+"），请按时签到。")
+		}
 	}
 	return s.reservations.GetView(ctx, res.ID)
 }
