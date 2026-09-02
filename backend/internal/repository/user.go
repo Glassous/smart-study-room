@@ -68,6 +68,39 @@ func (r *UserRepo) ExistsByUsername(ctx context.Context, username string) (bool,
 	return exists, err
 }
 
+// ListAll 用户列表(管理端, 倒序, 简单上限)
+func (r *UserRepo) ListAll(ctx context.Context, limit int) ([]*model.User, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+userCols+` FROM users ORDER BY id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []*model.User
+	for rows.Next() {
+		u := &model.User{}
+		if err := rows.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.RealName, &u.StudentNo,
+			&u.Role, &u.CreditScore, &u.CreditBannedUntil, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, u)
+	}
+	return list, rows.Err()
+}
+
+// SetStatus 启用/禁用账号
+func (r *UserRepo) SetStatus(ctx context.Context, id int64, status string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE users SET status = $2, updated_at = now() WHERE id = $1`, id, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func nullableStr(p *string) string {
 	if p == nil {
 		return ""
