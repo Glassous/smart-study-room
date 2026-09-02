@@ -30,6 +30,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	seatService := service.NewSeatService(roomRepo, seatRepo)
 	reservationService := service.NewReservationService(reservationRepo, roomRepo, seatRepo, userRepo)
 	lifecycleService := service.NewLifecycleService(reservationRepo)
+	allocationService := service.NewAllocationService(seatRepo, roomRepo, userRepo, reservationRepo, reservationService)
 
 	// 处理层
 	health := handler.NewHealthHandler(pool)
@@ -37,6 +38,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	room := handler.NewRoomHandler(seatService)
 	adminRoom := handler.NewAdminRoomHandler(seatService)
 	reservation := handler.NewReservationHandler(reservationService, lifecycleService)
+	allocation := handler.NewAllocationHandler(allocationService)
 
 	api := r.Group("/api")
 	{
@@ -55,6 +57,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 			authorized.GET("/rooms", room.ListRooms)
 			authorized.GET("/rooms/:id/seats", room.GetSeatMap)
 			authorized.POST("/reservations", reservation.Create)
+			authorized.POST("/reservations/auto", allocation.AutoAllocate)
 			authorized.GET("/reservations/mine", reservation.ListMine)
 			authorized.POST("/reservations/:id/cancel", reservation.Cancel)
 			authorized.POST("/reservations/:id/checkin", reservation.Checkin)
