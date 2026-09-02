@@ -11,6 +11,8 @@ const auth = useAuthStore()
 const menus = computed(() => {
   const items = [
     { index: '/booking', title: '座位预约', icon: 'Seat' },
+    { index: '/mine', title: '我的预约', icon: 'Tickets' },
+    { index: '/waitlist', title: '我的候补', icon: 'Clock' },
     { index: '/', title: '首页', icon: 'HomeFilled' }
   ]
   if (auth.isAdmin) {
