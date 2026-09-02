@@ -21,16 +21,19 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) *gin.Engine {
 	userRepo := repository.NewUserRepo(pool)
 	roomRepo := repository.NewRoomRepo(pool)
 	seatRepo := repository.NewSeatRepo(pool)
+	reservationRepo := repository.NewReservationRepo(pool)
 
 	// 服务层
 	authService := service.NewAuthService(userRepo, cfg)
 	seatService := service.NewSeatService(roomRepo, seatRepo)
+	reservationService := service.NewReservationService(reservationRepo, roomRepo, seatRepo, userRepo)
 
 	// 处理层
 	health := handler.NewHealthHandler(pool)
 	auth := handler.NewAuthHandler(authService)
 	room := handler.NewRoomHandler(seatService)
 	adminRoom := handler.NewAdminRoomHandler(seatService)
+	reservation := handler.NewReservationHandler(reservationService)
 
 	api := r.Group("/api")
 	{
@@ -43,11 +46,14 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) *gin.Engine {
 			authGroup.GET("/profile", middleware.AuthRequired(authService), auth.Profile)
 		}
 
-		// 学生侧: 房间与座位平面图(需登录)
+		// 学生侧: 房间/座位/预约(需登录)
 		authorized := api.Group("", middleware.AuthRequired(authService))
 		{
 			authorized.GET("/rooms", room.ListRooms)
 			authorized.GET("/rooms/:id/seats", room.GetSeatMap)
+			authorized.POST("/reservations", reservation.Create)
+			authorized.GET("/reservations/mine", reservation.ListMine)
+			authorized.POST("/reservations/:id/cancel", reservation.Cancel)
 		}
 
 		// 管理端: 房间/座位维护(仅 admin)
