@@ -1,0 +1,43 @@
+%% 图 3-2 系统架构图（四层逻辑架构）
+flowchart TB
+    subgraph L1[客户端层]
+        direction LR
+        V1[登录/注册]
+        V2[座位平面图预约]
+        V3[我的预约]
+        V4[热力图与统计]
+        V5[消息/个人中心]
+        V6[管理端]
+    end
+
+    subgraph L2[接入层 Gin]
+        direction LR
+        R1[路由注册]
+        R2[中间件链<br/>CORS → JWT → RBAC → Logger]
+    end
+
+    subgraph L3[业务服务层]
+        direction LR
+        S1[认证<br/>服务]
+        S2[座位<br/>服务]
+        S3[预约<br/>服务]
+        S4[自动分配<br/>服务]
+        S5[生命周期<br/>+调度器]
+        S6[信用<br/>服务]
+        S7[候补<br/>服务]
+        S8[通知<br/>服务]
+        S9[统计<br/>服务]
+    end
+
+    subgraph L4[数据层]
+        direction LR
+        DA[Repository 数据访问]
+        DB[(PostgreSQL 18<br/>7 表 + 排除约束 + 索引)]
+        MIG[迁移脚本/种子数据]
+    end
+
+    L1 -->|REST / JSON| L2
+    L2 --> L3
+    L3 --> L4
+    DA --> DB
+    MIG --> DB
