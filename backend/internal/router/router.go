@@ -19,13 +19,18 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) *gin.Engine {
 
 	// 数据层
 	userRepo := repository.NewUserRepo(pool)
+	roomRepo := repository.NewRoomRepo(pool)
+	seatRepo := repository.NewSeatRepo(pool)
 
 	// 服务层
 	authService := service.NewAuthService(userRepo, cfg)
+	seatService := service.NewSeatService(roomRepo, seatRepo)
 
 	// 处理层
 	health := handler.NewHealthHandler(pool)
 	auth := handler.NewAuthHandler(authService)
+	room := handler.NewRoomHandler(seatService)
+	adminRoom := handler.NewAdminRoomHandler(seatService)
 
 	api := r.Group("/api")
 	{
@@ -36,6 +41,25 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) *gin.Engine {
 			authGroup.POST("/register", auth.Register)
 			authGroup.POST("/login", auth.Login)
 			authGroup.GET("/profile", middleware.AuthRequired(authService), auth.Profile)
+		}
+
+		// 学生侧: 房间与座位平面图(需登录)
+		authorized := api.Group("", middleware.AuthRequired(authService))
+		{
+			authorized.GET("/rooms", room.ListRooms)
+			authorized.GET("/rooms/:id/seats", room.GetSeatMap)
+		}
+
+		// 管理端: 房间/座位维护(仅 admin)
+		adminGroup := api.Group("/admin",
+			middleware.AuthRequired(authService), middleware.RequireAdmin())
+		{
+			adminGroup.POST("/rooms", adminRoom.CreateRoom)
+			adminGroup.PUT("/rooms/:id", adminRoom.UpdateRoom)
+			adminGroup.DELETE("/rooms/:id", adminRoom.DeleteRoom)
+			adminGroup.POST("/rooms/:id/seats/batch", adminRoom.BatchGenSeats)
+			adminGroup.PUT("/seats/:id", adminRoom.UpdateSeat)
+			adminGroup.DELETE("/seats/:id", adminRoom.DeleteSeat)
 		}
 	}
 
