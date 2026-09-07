@@ -3,12 +3,17 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/imicola/smart-study-room/backend/internal/model"
+	"github.com/imicola/smart-study-room/backend/internal/pkg/rediscache"
+	"github.com/imicola/smart-study-room/backend/internal/pkg/redissync"
 	"github.com/imicola/smart-study-room/backend/internal/repository"
 )
 
@@ -19,17 +24,17 @@ const (
 )
 
 var (
-	ErrResNotFound    = errors.New("预约单不存在")
-	ErrNotOwner       = errors.New("无权操作他人的预约")
-	ErrBadSlot        = errors.New("时段参数错误(需 HH:MM, 粒度30分钟, 且开始早于结束)")
-	ErrOutOfOpenTime  = errors.New("预约时段超出房间开放时间")
-	ErrTooLong        = errors.New("单次预约时长超出限制")
-	ErrInPast         = errors.New("不能预约已开始或过期的时段")
-	ErrSeatConflict   = errors.New("该座位此时段已被预约")
-	ErrUserConflict   = errors.New("您在同一时段已有其他预约")
+	ErrResNotFound     = errors.New("预约单不存在")
+	ErrNotOwner        = errors.New("无权操作他人的预约")
+	ErrBadSlot         = errors.New("时段参数错误(需 HH:MM, 粒度30分钟, 且开始早于结束)")
+	ErrOutOfOpenTime   = errors.New("预约时段超出房间开放时间")
+	ErrTooLong         = errors.New("单次预约时长超出限制")
+	ErrInPast          = errors.New("不能预约已开始或过期的时段")
+	ErrSeatConflict    = errors.New("该座位此时段已被预约")
+	ErrUserConflict    = errors.New("您在同一时段已有其他预约")
 	ErrSeatUnavailable = errors.New("座位不存在或不可预约")
-	ErrCreditBanned   = errors.New("信用分过低，暂时禁止预约")
-	ErrInvalidState   = errors.New("当前状态不允许该操作")
+	ErrCreditBanned    = errors.New("信用分过低，暂时禁止预约")
+	ErrInvalidState    = errors.New("当前状态不允许该操作")
 )
 
 // ReservationService 预约核心服务
@@ -40,6 +45,8 @@ type ReservationService struct {
 	users        *repository.UserRepo
 	credit       *CreditService
 	notifier     *NotificationService
+	rdb          *redis.Client
+	cache        *rediscache.Helper
 }
 
 func NewReservationService(
@@ -52,6 +59,12 @@ func NewReservationService(
 ) *ReservationService {
 	return &ReservationService{reservations: reservations, rooms: rooms, seats: seats,
 		users: users, credit: credit, notifier: notifier}
+}
+
+// SetRedis 注入 Redis 客户端与缓存辅助器
+func (s *ReservationService) SetRedis(rdb *redis.Client, cache *rediscache.Helper) {
+	s.rdb = rdb
+	s.cache = cache
 }
 
 // validateSlot 校验时段格式/粒度/时长
@@ -120,6 +133,42 @@ func (s *ReservationService) CreateWithSource(ctx context.Context, userID int64,
 		return nil, ErrCreditBanned
 	}
 
+	// 1. 用户防重锁；Redis 异常时由下层数据库约束兜底。
+	if s.rdb != nil {
+		userLockKey := fmt.Sprintf("studyroom:lock:user:%d:%s", userID, req.Date)
+		userLock := redissync.NewMutex(s.rdb, userLockKey, 30*time.Second)
+		ok, err := userLock.TryLock(ctx)
+		if err != nil {
+			log.Printf("[reservation] 获取用户锁失败，降级到数据库约束 user=%d: %v", userID, err)
+		} else if !ok {
+			return nil, errors.New("您当前有正在处理的预约请求，请稍候再试")
+		} else {
+			stopRenew := userLock.StartAutoRenew(ctx, 10*time.Second, func(err error) {
+				log.Printf("[reservation] 用户锁续租失败 user=%d: %v", userID, err)
+			})
+			defer func() { _ = userLock.Unlock(context.Background()) }()
+			defer stopRenew()
+		}
+	}
+
+	// 2. 精确时段座位锁用于削减重复请求；重叠时段最终由 PostgreSQL 排除约束裁决。
+	if s.rdb != nil {
+		seatLockKey := fmt.Sprintf("studyroom:lock:seat:%d:%s:%s_%s", req.SeatID, req.Date, req.StartTime, req.EndTime)
+		seatLock := redissync.NewMutex(s.rdb, seatLockKey, 30*time.Second)
+		ok, err := seatLock.TryLock(ctx)
+		if err != nil {
+			log.Printf("[reservation] 获取座位锁失败，降级到数据库约束 seat=%d: %v", req.SeatID, err)
+		} else if !ok {
+			return nil, ErrSeatConflict
+		} else {
+			stopRenew := seatLock.StartAutoRenew(ctx, 10*time.Second, func(err error) {
+				log.Printf("[reservation] 座位锁续租失败 seat=%d: %v", req.SeatID, err)
+			})
+			defer func() { _ = seatLock.Unlock(context.Background()) }()
+			defer stopRenew()
+		}
+	}
+
 	// 应用层冲突预检(数据库排除约束兜底)
 	seatConflict, userConflict, err := s.reservations.HasConflict(ctx, req.SeatID, userID,
 		req.Date, padTime(req.StartTime), padTime(req.EndTime))
@@ -158,6 +207,12 @@ func (s *ReservationService) CreateWithSource(ctx context.Context, userID int64,
 		}
 		return nil, err
 	}
+
+	// 预约成功后失效统计与热力图缓存
+	if s.cache != nil {
+		_ = s.cache.InvalidateStats(ctx)
+	}
+
 	// 预约成功通知(降级: 失败不阻断)
 	if s.notifier != nil {
 		view, verr := s.reservations.GetView(ctx, res.ID)
@@ -194,6 +249,12 @@ func (s *ReservationService) Cancel(ctx context.Context, userID, resID int64) er
 	if !updated {
 		return ErrInvalidState
 	}
+
+	// 取消成功后清理统计缓存
+	if s.cache != nil {
+		_ = s.cache.InvalidateStats(ctx)
+	}
+
 	// 迟到取消扣分(不影响取消结果)
 	if st, err := resStart(res); err == nil && time.Until(st) < 30*time.Minute {
 		if s.credit != nil {

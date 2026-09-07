@@ -7,14 +7,15 @@ import (
 	"time"
 
 	"github.com/imicola/smart-study-room/backend/internal/model"
+	"github.com/imicola/smart-study-room/backend/internal/pkg/rediscache"
 	"github.com/imicola/smart-study-room/backend/internal/repository"
 )
 
 // 生命周期规则参数
 const (
-	CheckinEarlyMinutes  = 15 // 最早可提前签到(分钟)
-	CheckinGraceMinutes  = 15 // 开始后签到宽限(分钟), 超过判违约
-	TempLeaveMaxMinutes  = 30 // 临时离开最长时间(分钟)
+	CheckinEarlyMinutes = 15 // 最早可提前签到(分钟)
+	CheckinGraceMinutes = 15 // 开始后签到宽限(分钟), 超过判违约
+	TempLeaveMaxMinutes = 30 // 临时离开最长时间(分钟)
 )
 
 var (
@@ -58,6 +59,18 @@ func (c *CompositeHooks) OnComplete(res *model.Reservation) {
 type LifecycleService struct {
 	reservations *repository.ReservationRepo
 	hooks        LifecycleHooks
+	cache        *rediscache.Helper
+}
+
+// SetCache 注入统计缓存失效器。
+func (s *LifecycleService) SetCache(cache *rediscache.Helper) {
+	s.cache = cache
+}
+
+func (s *LifecycleService) invalidateStats(ctx context.Context) {
+	if s.cache != nil {
+		_ = s.cache.InvalidateStats(ctx)
+	}
 }
 
 func NewLifecycleService(reservations *repository.ReservationRepo) *LifecycleService {
@@ -109,6 +122,7 @@ func (s *LifecycleService) Checkin(ctx context.Context, userID, resID int64) err
 	if !updated {
 		return ErrInvalidState
 	}
+	s.invalidateStats(ctx)
 	return nil
 }
 
@@ -130,6 +144,7 @@ func (s *LifecycleService) Leave(ctx context.Context, userID, resID int64) error
 	if !updated {
 		return ErrInvalidState
 	}
+	s.invalidateStats(ctx)
 	return nil
 }
 
@@ -153,6 +168,7 @@ func (s *LifecycleService) ReturnBack(ctx context.Context, userID, resID int64) 
 	if !updated {
 		return ErrInvalidState
 	}
+	s.invalidateStats(ctx)
 	return nil
 }
 
@@ -174,6 +190,7 @@ func (s *LifecycleService) Checkout(ctx context.Context, userID, resID int64) er
 	if !updated {
 		return ErrInvalidState
 	}
+	s.invalidateStats(ctx)
 	// 触发履约事件(信用加分等, 由钩子消费)
 	if fresh, err := s.reservations.GetByID(ctx, resID); err == nil {
 		s.hooks.OnComplete(fresh)
@@ -205,6 +222,9 @@ func (s *LifecycleService) Tick(ctx context.Context) (violations, completes, lea
 	}
 	for _, res := range leaveOut {
 		s.hooks.OnComplete(res)
+	}
+	if len(noShows)+len(done)+len(leaveOut) > 0 {
+		s.invalidateStats(ctx)
 	}
 
 	return len(noShows), len(done), len(leaveOut)

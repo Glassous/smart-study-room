@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -24,9 +25,18 @@ func AuthRequired(auth *service.AuthService) gin.HandlerFunc {
 			abort(c, http.StatusUnauthorized, "缺少 Bearer 令牌")
 			return
 		}
-		claims, err := auth.ParseToken(strings.TrimPrefix(header, "Bearer "))
+		rawToken := strings.TrimPrefix(header, "Bearer ")
+		claims, err := auth.ParseToken(rawToken)
 		if err != nil {
 			abort(c, http.StatusUnauthorized, "令牌无效或已过期")
+			return
+		}
+		blacklisted, blacklistErr := auth.IsTokenBlacklisted(c.Request.Context(), rawToken)
+		if blacklistErr != nil {
+			log.Printf("[auth] 查询令牌黑名单失败，降级放行: %v", blacklistErr)
+		}
+		if blacklisted {
+			abort(c, http.StatusUnauthorized, "令牌已注销，请重新登录")
 			return
 		}
 		c.Set(ctxUID, claims.UID)

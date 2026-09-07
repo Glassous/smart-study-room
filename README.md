@@ -4,6 +4,7 @@
 ![Go](https://img.shields.io/badge/backend-Go%201.27%20%2B%20Gin-00ADD8)
 ![Vue](https://img.shields.io/badge/frontend-Vue%203%20%2B%20Vite-42b883)
 ![PostgreSQL](https://img.shields.io/badge/db-PostgreSQL%2018-336791)
+![Redis](https://img.shields.io/badge/cache-Redis%207-DC382D)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 > 《系统分析与设计》课程设计 —— 面向高校共享自习室场景的座位预约与管理平台。
@@ -12,58 +13,55 @@
 
 随着高校与城市共享自习室的普及，传统"到店找座"模式存在座位资源利用率不均、
 占座严重、违约成本低等问题。本系统提供**在线选座预约、智能自动分配、
-座位热力图、信用分体系、满座候补**等能力，帮助学生高效获得学习座位，
-帮助管理员数据化运营自习室资源。
+座位热力图、信用分体系、满座候补**等能力，并引入 **Redis 内存中间件** 支撑高并发分布式锁、旁路缓存防雪崩、接口级限流与 JWT 登出黑名单，
+帮助学生高效获得学习座位，帮助管理员数据化运营自习室资源。
 
 ## 技术栈
 
-| 层次 | 选型 |
-| --- | --- |
-| 后端 | Go 1.27 + Gin + pgx |
-| 前端 | Vite + Vue 3 + Element Plus + ECharts + Pinia |
-| 数据库 | PostgreSQL 18 |
-| 认证 | JWT（HS256）+ bcrypt |
-| CI | GitHub Actions |
+| 层次 | 选型 | 用途 |
+| --- | --- | --- |
+| 后端 | Go 1.27 + Gin + pgx | RESTful API 服务与业务领域模型 |
+| 前端 | Vite + Vue 3 + Element Plus + ECharts + Pinia | 响应式交互界面与图表大屏 |
+| 关系数据库 | PostgreSQL 18 | 持久化主库，GiST 排除约束兜底防超卖 |
+| 缓存与互斥 | Redis 7（Docker 容器） | 旁路缓存（Cache-Aside）、分布式锁、限流与黑名单 |
+| 认证机制 | JWT（HS256）+ bcrypt + Redis 黑名单 | 安全会话与主动注销 |
+| 容器与 CI | Docker Compose + GitHub Actions | 一键本地编排与自动化构建测试 |
 
 ## 功能总览
 
-- 身份鉴别与认证：注册 / 登录 / JWT 会话 / 学生与管理员双角色
-- 座位管理：自习室、座位的增删改查与批量生成，靠窗 / 电源 / 区域属性
-- 在线预约：座位平面图选座、时段冲突检测
-- 智能自动分配：按偏好加权评分自动推荐 / 分配座位
-- 座位热力图：座位 × 时段利用率可视化
-- 预约全生命周期：签到、临时离开、签退、超时违约自动处理
-- 信用分体系：违约扣分、履约加分、低分限约
-- 满座候补：候补排队、空位自动递补
-- 消息中心：预约 / 违约 / 递补等事件通知
-- 统计仪表盘：使用率趋势、高峰时段、热门座位
+- **身份鉴别与认证**：注册 / 登录 / JWT 会话 / 登出主动注销（Redis 黑名单） / 登录防爆破限流
+- **座位管理**：自习室与座位增删改查、批量生成、靠窗 / 电源 / 区域属性维护、座位平面图 Redis 极速缓存
+- **高并发在线预约**：基于 Redis 分布式互斥锁（Lua 脚本）排队抢座 + PostgreSQL 排除约束最终兜底
+- **智能自动分配**：按偏好加权评分自动推荐 / 分配座位（偏好得分 + 削峰填谷热度均衡）
+- **座位热力图**：座位 × 时段利用率可视化，Redis 旁路缓存聚合报表（TTL 抖动防雪崩）
+- **预约全生命周期**：签到、临时离开、签退、超时违约自动处理
+- **高可用后台调度**：基于 Redis 分布式锁竞选 Leader 主备节点，支持多实例水平扩展
+- **信用分体系**：违约扣分、履约加分、低分限约与流水追溯
+- **满座候补**：候补排队、空位自动递补
+- **消息中心**：预约 / 违约 / 递补等事件站内通知
+- **统计仪表盘**：使用率趋势、高峰时段、热门座位分析
 
 ## 快速开始
 
-> 两种方式任选：**方式一** 用 Docker 一键启动数据库与后端（推荐，起库即用）；**方式二** 纯本地运行，便于本地调试前后端代码。
+> 推荐使用 **Docker Compose** 一键启动 PostgreSQL + Redis + 后端（起库即用）；如需纯本地运行调试，系统具备**优雅降级（Fallback）**能力：若不配置或无法连接 Redis，系统会自动降级为纯 PostgreSQL 模式运行。
 
-### 方式一：Docker 启动（数据库 + 后端，推荐）
+### 方式一：Docker 启动（数据库 + Redis + 后端，推荐）
 
-前置条件：已安装并启动 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（Windows 下无需 WSL）。
+前置条件：已安装并启动 [Docker Desktop](https://www.docker.com/products/docker-desktop/)。
 
 ```bash
-docker compose up -d --build     # 构建并启动（首次需拉取基础镜像，耗时较长）
-docker compose ps                # 查看状态：db 应 healthy，backend 应 running
+docker compose up -d --build     # 构建并启动 PostgreSQL、Redis 7 与后端
+docker compose ps                # 查看状态：db / redis 应 healthy，backend 应 running
 docker compose logs -f backend   # 跟踪后端日志
 ```
 
-- **后端 API**：http://localhost:8080（若本机 8080 已被其它服务占用，可在根目录 `.env` 设 `STUDYROOM_HOST_PORT=8081` 后重新 `docker compose up -d`，并将 `frontend/vite.config.js` 代理目标改为对应端口）
-- **数据库**：宿主机 `localhost:5433`（容器内 5432），避免与本机既有 PostgreSQL（5432）端口冲突
-- **数据迁移与初始化**：数据库容器**首次启动**时自动按序执行 `backend/migrations/001_init.sql`（建表/约束/索引）与 `backend/seed/seed.sql`（演示种子数据），无需手动执行迁移脚本
-- **数据持久化与重置**：数据保存在 Docker 卷 `db-data` 中，`down` 不会丢失；需要重建数据库时执行：
-
-```bash
-docker compose down -v    # 删除数据卷
-docker compose up -d      # 下次启动将重新执行迁移与种子数据
-```
-
-- 停止服务（保留数据）：`docker compose down`
-- 本地前端联调：`cd frontend && npm install && npm run dev`，Vite 已将 `/api` 代理到 `http://127.0.0.1:8080`，可直接对接容器内后端
+- **后端 API**：http://localhost:8080
+- **PostgreSQL 数据库**：宿主机 `localhost:5433`（容器内 5432，数据卷持久化于 `db-data`）
+- **Redis 缓存服务**：宿主机 `localhost:6380`（容器内 6379，数据卷持久化于 `redis-data`，避免与宿主机既有 6379 冲突）
+- **数据迁移与初始化**：首次启动时已自动导入建表脚本与 14 天演示种子数据
+- **停止服务（保留数据）**：`docker compose down`
+- **重置数据与镜像**：`docker compose down -v`
+- **本地前端联调**：`cd frontend && npm install && npm run dev`，Vite 已将 `/api` 代理到 `http://127.0.0.1:8080`，可直接对接容器内后端
 
 ### 方式二：纯本地运行（开发调试用）
 
@@ -96,11 +94,24 @@ npm run dev            # 默认 http://localhost:5173
 ## 项目结构
 
 ```
-backend/    Go 后端（handler / service / repository 分层）
-frontend/   Vue 3 前端
-docs/       课程设计文档（可行性研究/范围说明/报告/需求/概要/详细/进度日志）
-diagrams/   系统分析设计图（Mermaid × 16：用例/架构/ER/类图/状态/时序/DFD 等）
-scripts/    数据库与运维脚本
+backend/
+├── cmd/server/       入口主程序（依赖注入、优雅降级装配）
+├── internal/
+│   ├── config/       配置加载（PostgreSQL、Redis 等环境变量）
+│   ├── handler/      HTTP 适配器（参数解析、响应输出）
+│   ├── middleware/   中间件链（CORS、JWT 认证、Redis 黑名单、API 频次限流）
+│   ├── model/        领域模型与 DTO 传输对象
+│   ├── pkg/
+│   │   ├── rediscache/ 旁路缓存助手（Cache-Aside、防雪崩、优雅降级）
+│   │   └── redissync/  分布式互斥锁（Lua 脚本原子加锁与解锁）
+│   ├── repository/   PostgreSQL 数据访问与 Redis 客户端连接池
+│   ├── scheduler/    后台周期任务（基于 Redis 锁竞选 Leader 主备节点）
+│   └── service/      核心业务逻辑（预约、分配算法、生命周期、信用、统计）
+frontend/             Vue 3 前端应用
+docs/                 课程设计文档（可行性研究/范围说明/报告/需求/概要/详细/进度日志）
+diagrams/             系统分析设计图（Mermaid × 18：用例/架构/ER/类图/状态/时序/DFD 等）
+scripts/              数据库与运维自动化脚本
+docker-compose.yml    PostgreSQL 18 + Redis 7 + 后端多容器编排
 ```
 
 ## 课程设计文档索引

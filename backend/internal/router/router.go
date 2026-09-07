@@ -6,18 +6,23 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/imicola/smart-study-room/backend/internal/config"
 	"github.com/imicola/smart-study-room/backend/internal/handler"
 	"github.com/imicola/smart-study-room/backend/internal/middleware"
+	"github.com/imicola/smart-study-room/backend/internal/pkg/rediscache"
 	"github.com/imicola/smart-study-room/backend/internal/repository"
 	"github.com/imicola/smart-study-room/backend/internal/service"
 )
 
 // Setup 组装数据层/服务层/路由树, 并返回待启动的调度器
-func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Scheduler) {
+func Setup(pool *pgxpool.Pool, rdb *redis.Client, cfg *config.Config) (*gin.Engine, *service.Scheduler) {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery(), middleware.CORS())
+
+	// 缓存辅助器
+	cacheHelper := rediscache.NewHelper(rdb)
 
 	// 数据层
 	userRepo := repository.NewUserRepo(pool)
@@ -30,16 +35,20 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	statsRepo := repository.NewStatsRepo(pool)
 
 	// 服务层
-	authService := service.NewAuthService(userRepo, cfg)
+	authService := service.NewAuthService(userRepo, cfg, rdb)
 	seatService := service.NewSeatService(roomRepo, seatRepo)
+	seatService.SetCache(cacheHelper)
 	creditService := service.NewCreditService(creditRepo, userRepo)
 	notificationService := service.NewNotificationService(notificationRepo)
 	reservationService := service.NewReservationService(reservationRepo, roomRepo, seatRepo, userRepo, creditService, notificationService)
+	reservationService.SetRedis(rdb, cacheHelper)
 	lifecycleService := service.NewLifecycleService(reservationRepo)
 	lifecycleService.SetHooks(service.NewCompositeHooks(creditService, notificationService)) // 违约扣分+警告通知 / 履约加分
+	lifecycleService.SetCache(cacheHelper)
 	allocationService := service.NewAllocationService(seatRepo, roomRepo, userRepo, reservationRepo, reservationService)
 	waitlistService := service.NewWaitlistService(waitlistRepo, seatRepo, reservationRepo, reservationService, notificationService)
 	statsService := service.NewStatsService(statsRepo, seatRepo, roomRepo)
+	statsService.SetCache(cacheHelper)
 
 	// 处理层
 	health := handler.NewHealthHandler(pool)
@@ -61,7 +70,8 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 		authGroup := api.Group("/auth")
 		{
 			authGroup.POST("/register", auth.Register)
-			authGroup.POST("/login", auth.Login)
+			authGroup.POST("/login", middleware.RateLimitByIP(rdb, "login", 10, time.Minute), auth.Login)
+			authGroup.POST("/logout", middleware.AuthRequired(authService), auth.Logout)
 			authGroup.GET("/profile", middleware.AuthRequired(authService), auth.Profile)
 		}
 
@@ -70,8 +80,8 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 		{
 			authorized.GET("/rooms", room.ListRooms)
 			authorized.GET("/rooms/:id/seats", room.GetSeatMap)
-			authorized.POST("/reservations", reservation.Create)
-			authorized.POST("/reservations/auto", allocation.AutoAllocate)
+			authorized.POST("/reservations", middleware.RateLimitByUser(rdb, "reserve", 2, time.Second), reservation.Create)
+			authorized.POST("/reservations/auto", middleware.RateLimitByUser(rdb, "reserve_auto", 2, time.Second), allocation.AutoAllocate)
 			authorized.GET("/reservations/mine", reservation.ListMine)
 			authorized.POST("/reservations/:id/cancel", reservation.Cancel)
 			authorized.POST("/reservations/:id/checkin", reservation.Checkin)
@@ -117,5 +127,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 		}
 	}
 
-	return r, service.NewScheduler(lifecycleService, waitlistService, time.Minute)
+	scheduler := service.NewScheduler(lifecycleService, waitlistService, time.Minute)
+	scheduler.SetRedis(rdb)
+	return r, scheduler
 }

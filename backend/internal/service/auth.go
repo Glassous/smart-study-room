@@ -3,11 +3,14 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/imicola/smart-study-room/backend/internal/config"
@@ -17,19 +20,21 @@ import (
 
 // 认证相关业务错误
 var (
-	ErrUsernameTaken   = errors.New("用户名已被注册")
-	ErrBadCredentials  = errors.New("用户名或口令错误")
-	ErrUserDisabled    = errors.New("账号已被禁用")
+	ErrUsernameTaken         = errors.New("用户名已被注册")
+	ErrBadCredentials        = errors.New("用户名或口令错误")
+	ErrUserDisabled          = errors.New("账号已被禁用")
+	ErrRevocationUnavailable = errors.New("令牌注销服务暂时不可用")
 )
 
 // AuthService 认证服务
 type AuthService struct {
 	users *repository.UserRepo
 	cfg   *config.Config
+	rdb   *redis.Client
 }
 
-func NewAuthService(users *repository.UserRepo, cfg *config.Config) *AuthService {
-	return &AuthService{users: users, cfg: cfg}
+func NewAuthService(users *repository.UserRepo, cfg *config.Config, rdb *redis.Client) *AuthService {
+	return &AuthService{users: users, cfg: cfg, rdb: rdb}
 }
 
 // Register 注册新用户(默认 student 角色, 信用分 100)
@@ -119,4 +124,47 @@ func (s *AuthService) ParseToken(tokenStr string) (*model.Claims, error) {
 		return nil, err
 	}
 	return claims, nil
+}
+
+// TokenHash 计算令牌的 SHA-256 摘要作为 Redis 键的一部分
+func TokenHash(tokenStr string) string {
+	sum := sha256.Sum256([]byte(tokenStr))
+	return hex.EncodeToString(sum[:])
+}
+
+// Logout 用户登出: 将 Token 加入 Redis 黑名单直至其自然过期
+func (s *AuthService) Logout(ctx context.Context, tokenStr string) error {
+	if tokenStr == "" {
+		return nil
+	}
+	if s.rdb == nil {
+		return ErrRevocationUnavailable
+	}
+	claims, err := s.ParseToken(tokenStr)
+	if err != nil {
+		// 已经无效的 token 直接返回
+		return nil
+	}
+	remaining := time.Until(claims.ExpiresAt.Time)
+	if remaining <= 0 {
+		return nil
+	}
+	key := "studyroom:auth:blacklist:" + TokenHash(tokenStr)
+	if err := s.rdb.Set(ctx, key, "1", remaining).Err(); err != nil {
+		return fmt.Errorf("%w: %v", ErrRevocationUnavailable, err)
+	}
+	return nil
+}
+
+// IsTokenBlacklisted 检查令牌是否在注销黑名单中
+func (s *AuthService) IsTokenBlacklisted(ctx context.Context, tokenStr string) (bool, error) {
+	if s.rdb == nil || tokenStr == "" {
+		return false, nil
+	}
+	key := "studyroom:auth:blacklist:" + TokenHash(tokenStr)
+	res, err := s.rdb.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	return res > 0, nil
 }

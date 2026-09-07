@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -48,6 +49,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 	ok(c, resp)
+}
+
+// Logout POST /api/auth/logout
+func (h *AuthHandler) Logout(c *gin.Context) {
+	header := c.GetHeader("Authorization")
+	if strings.HasPrefix(header, "Bearer ") {
+		tokenStr := strings.TrimPrefix(header, "Bearer ")
+		if err := h.auth.Logout(c.Request.Context(), tokenStr); err != nil {
+			fail(c, http.StatusServiceUnavailable, "注销服务暂时不可用，请稍后重试")
+			return
+		}
+	}
+	ok(c, gin.H{"message": "已安全退出"})
 }
 
 // Profile GET /api/auth/profile

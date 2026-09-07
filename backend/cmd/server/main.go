@@ -23,10 +23,20 @@ func main() {
 	}
 	defer pool.Close()
 
+	// 初始化 Redis 客户端(支持平稳降级)
+	rdb, err := repository.NewRedisClient(context.Background(), cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	if err != nil {
+		log.Printf("提示: 连接 Redis 失败(%v), 系统已降级运行(纯 PostgreSQL 兜底模式)", err)
+		rdb = nil
+	} else {
+		defer rdb.Close()
+		log.Printf("Redis 连接成功: %s (db=%d)", cfg.RedisAddr, cfg.RedisDB)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	r, scheduler := router.Setup(pool, cfg)
+	r, scheduler := router.Setup(pool, rdb, cfg)
 
 	// 启动后台调度器(违约扫描/到时完成/临时离开超时)
 	go scheduler.Run(ctx)
