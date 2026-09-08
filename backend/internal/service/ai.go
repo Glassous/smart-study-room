@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -127,6 +128,7 @@ func (s *AIService) Chat(ctx context.Context, uid, conversationID int64, text st
 	}
 	result, err := s.client.Stream(ctx, messages, onDelta)
 	if err != nil {
+		log.Printf("[ai] uid=%d conversation=%d AI 流式请求失败: %v", uid, conversationID, err)
 		_ = s.repo.UpdateMessage(context.Background(), assistant.ID, resultContent(result), nil, "failed")
 		return conversationID, assistant.ID, err
 	}

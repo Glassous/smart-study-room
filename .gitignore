@@ -12,7 +12,6 @@ frontend/.vite/
 
 # 环境与日志
 .env
-backend/.env
 *.log
 logs/
 

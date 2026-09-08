@@ -28,26 +28,6 @@ const contentRef = ref(null)
 const isDesktopCollapsed = computed(() => !isNarrowScreen.value && isSidebarCollapsed.value)
 let titleMedia = null
 
-// 折叠态单图标 3 循环切换状态
-const themeIconName = computed(() => {
-  if (themeStore.mode === 'system') return 'system'
-  if (themeStore.mode === 'dark') return 'moon'
-  return 'sun'
-})
-
-const themeCycleTitle = computed(() => {
-  if (themeStore.mode === 'system') return '当前：跟随系统（点击切换）'
-  if (themeStore.mode === 'light') return '当前：浅色模式（点击切换）'
-  return '当前：深色模式（点击切换）'
-})
-
-function cycleTheme() {
-  const order = ['system', 'light', 'dark']
-  const currentIndex = order.indexOf(themeStore.mode)
-  const nextIndex = (currentIndex + 1) % order.length
-  themeStore.setMode(order[nextIndex])
-}
-
 // 未读消息角标(通过 Pinia Store 集中管理与 60s 轮询)
 const unread = computed(() => notifStore.unread)
 let timer = null
@@ -243,9 +223,9 @@ onUnmounted(() => {
 
     <!-- ============== 左栏（导航 / 品牌 / 用户） ============== -->
     <aside class="sidebar" :class="{ collapsed: isSidebarCollapsed }">
-      <!-- 品牌（保留智能自习室与副标题） -->
-      <div class="brand">
-        <div v-show="!isDesktopCollapsed" class="brand-copy">
+      <!-- 品牌（保留智能自习室与副标题；折叠按钮展开态居右、折叠态居左，纵向高度恒定） -->
+      <div class="brand" :class="{ collapsed: isDesktopCollapsed }">
+        <div class="brand-copy">
           <div class="brand-name">智能自习室</div>
           <div class="brand-sub">Smart Study Room</div>
         </div>
@@ -285,9 +265,9 @@ onUnmounted(() => {
 
       <div class="sidebar-spacer" />
 
-      <!-- 主题模式切换 -->
-      <div class="sidebar-theme">
-        <div v-show="!isDesktopCollapsed" class="theme-switch-group" role="radiogroup" aria-label="主题模式选择">
+      <!-- 主题模式切换（折叠后整体隐藏） -->
+      <div class="sidebar-theme" :class="{ collapsed: isDesktopCollapsed }">
+        <div class="theme-switch-group" role="radiogroup" aria-label="主题模式选择">
           <button
             type="button"
             class="theme-btn"
@@ -325,18 +305,6 @@ onUnmounted(() => {
             <span>深色</span>
           </button>
         </div>
-
-        <!-- 折叠态：单图标 3 循环切换按钮 -->
-        <button
-          v-show="isDesktopCollapsed"
-          type="button"
-          class="theme-cycle-btn"
-          :title="themeCycleTitle"
-          :aria-label="themeCycleTitle"
-          @click="cycleTheme"
-        >
-          <AppIcon :name="themeIconName" :size="18" />
-        </button>
       </div>
 
       <!-- 底部：个人区域（折叠后仅显示头像，展开显示头像+信息+退出登录） -->
@@ -413,28 +381,25 @@ onUnmounted(() => {
 }
 
 .brand {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0 16px;
-  min-height: 52px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
   white-space: nowrap;
   box-sizing: border-box;
   overflow: hidden;
-}
-.shell:not(.narrow-screen) .sidebar.collapsed .brand {
-  padding: 4px 0 16px 0;
-  gap: 0;
 }
 .brand-copy {
   min-width: 0;
   flex: 1;
   overflow: hidden;
   padding-left: 4px;
+  padding-right: 52px;
   transition: opacity var(--dur-2) var(--ease);
 }
-.shell:not(.narrow-screen) .sidebar.collapsed .brand-copy {
+.brand.collapsed .brand-copy {
   opacity: 0;
   pointer-events: none;
 }
@@ -458,17 +423,22 @@ onUnmounted(() => {
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-4);
+  position: absolute;
+  right: 0;
+  top: 10px;
   width: 48px;
   height: 36px;
   padding: 0;
   border-radius: var(--r-md);
   display: grid;
   place-items: center;
-  flex: 0 0 48px;
-  margin-left: auto;
   cursor: pointer;
   box-sizing: border-box;
   transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.brand.collapsed .sidebar-toggle {
+  right: auto;
+  left: 0;
 }
 .sidebar-toggle:hover {
   color: var(--text-2);
@@ -585,19 +555,24 @@ onUnmounted(() => {
   min-height: 8px;
 }
 
-/* 主题模式切换 */
+/* 主题模式切换（折叠后整体隐藏，高度平滑收缩避免弹跳） */
 .sidebar-theme {
-  padding: 8px 0 4px;
   display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  overflow: hidden;
+  height: 40px;
   width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: height var(--dur-3) var(--ease), opacity var(--dur-2) var(--ease);
+}
+
+.sidebar-theme.collapsed {
+  height: 0;
+  opacity: 0;
 }
 
 .theme-switch-group {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 2px;
   padding: 3px;
   background: var(--surface-3);
@@ -610,11 +585,12 @@ onUnmounted(() => {
 .theme-btn {
   all: unset;
   flex: 1;
+  height: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 5px 0;
+  padding: 0;
   border-radius: var(--r-sm);
   font-size: 12px;
   font-weight: 500;
@@ -640,45 +616,10 @@ onUnmounted(() => {
   outline-offset: -1px;
 }
 
-/* 折叠态：单图标 3 循环切换按钮 */
-.theme-cycle-btn {
-  all: unset;
-  width: 48px;
-  min-width: 48px;
-  max-width: 48px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--r-md);
-  background: var(--surface-3);
-  border: 1px solid var(--hairline);
-  color: var(--primary);
-  cursor: pointer;
-  box-sizing: border-box;
-  flex: 0 0 48px;
-  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
-}
-
-.theme-cycle-btn:hover {
-  background: var(--surface-hover);
-  color: var(--primary-active);
-  border-color: var(--border);
-}
-
-.theme-cycle-btn:active {
-  transform: scale(.95);
-}
-
-.theme-cycle-btn:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
-}
-
 /* 底部用户卡 */
 .sidebar-footer {
   padding-top: 6px;
   margin-top: 4px;
-  border-top: 1px solid var(--hairline);
   overflow: hidden;
   width: 100%;
 }
@@ -721,10 +662,12 @@ onUnmounted(() => {
 .user-meta {
   flex: 1;
   min-width: 0;
+  height: 36px;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   align-items: flex-start;
-  gap: 3px;
+  gap: 0;
   padding-left: 6px;
   overflow: hidden;
   transition: opacity var(--dur-2) var(--ease);
@@ -733,6 +676,7 @@ onUnmounted(() => {
 .user-name {
   font-size: 13px;
   font-weight: 600;
+  line-height: 16px;
   color: var(--text-1);
   max-width: 100%;
   white-space: nowrap;
@@ -741,10 +685,13 @@ onUnmounted(() => {
 }
 
 .role-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 0 8px;
   border-radius: var(--r-full);
 }
 
