@@ -57,6 +57,16 @@ func RequireAdmin() gin.HandlerFunc {
 	}
 }
 
+func RequireStudent() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if CurrentRole(c) != model.RoleStudent {
+			abort(c, http.StatusForbidden, "仅学生可使用 AI 助手")
+			return
+		}
+		c.Next()
+	}
+}
+
 // CurrentUID 从上下文取当前用户 ID
 func CurrentUID(c *gin.Context) int64 {
 	v, _ := c.Get(ctxUID)

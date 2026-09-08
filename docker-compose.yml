@@ -33,6 +33,7 @@ services:
       # 只读挂载 schema 迁移与种子数据，按文件名序执行(001 → 002)
       - ./backend/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
       - ./backend/seed/seed.sql:/docker-entrypoint-initdb.d/002_seed.sql:ro
+      - ./backend/migrations/002_ai_assistant.sql:/docker-entrypoint-initdb.d/003_ai_assistant.sql:ro
     healthcheck:
       # $$ 转义: 由容器内环境变量展开，避免 compose 提前插值
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -71,6 +72,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: studyroom-backend
+    # AI 凭据只从后端专用的忽略文件读取，不写入 compose 配置或镜像。
+    env_file:
+      - ./backend/.env
     environment:
       STUDYROOM_PORT: "8080"
       STUDYROOM_DB_URL: postgres://${POSTGRES_USER:-studyroom}:${POSTGRES_PASSWORD:-studyroom}@db:5432/${POSTGRES_DB:-studyroom}?sslmode=disable

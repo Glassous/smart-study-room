@@ -12,6 +12,7 @@ frontend/.vite/
 
 # 环境与日志
 .env
+backend/.env
 *.log
 logs/
 
@@ -23,3 +24,7 @@ logs/
 
 # 本地临时
 tmp/
+.gocache/
+**/.gocache/
+.qa-docx/
+**/.qa-docx/

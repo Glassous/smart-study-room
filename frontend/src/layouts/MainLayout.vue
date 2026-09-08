@@ -5,13 +5,15 @@ import { ElMessage } from 'element-plus'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useAuthStore } from '../stores/auth'
-import { unreadCount } from '../api/notification'
+import { useNotificationStore } from '../stores/notification'
 import AppIcon from '../components/AppIcon.vue'
 import MobileTopbar from '../components/MobileTopbar.vue'
+import AIAssistant from '../components/AIAssistant.vue'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const notifStore = useNotificationStore()
 const narrowMediaQuery = window.matchMedia('(max-width: 1024px)')
 const isNarrowScreen = ref(narrowMediaQuery.matches)
 const isSidebarCollapsed = ref(narrowMediaQuery.matches)
@@ -22,16 +24,12 @@ const contentRef = ref(null)
 const isDesktopCollapsed = computed(() => !isNarrowScreen.value && isSidebarCollapsed.value)
 let titleMedia = null
 
-// 未读消息角标(60s 轮询)
-const unread = ref(0)
+// 未读消息角标(通过 Pinia Store 集中管理与 60s 轮询)
+const unread = computed(() => notifStore.unread)
 let timer = null
 
-async function refreshUnread() {
-  if (!auth.isLoggedIn || !auth.isStudent) return
-  try {
-    const resp = await unreadCount()
-    unread.value = resp.data?.count || 0
-  } catch { /* 忽略轮询失败 */ }
+function refreshUnread() {
+  notifStore.refresh()
 }
 
 // 菜单：首页 / 预约 / 我的预约 / 候补 / 统计 / 消息 / 个人中心 / 管理端
@@ -311,6 +309,7 @@ onUnmounted(() => {
         <router-view />
       </main>
     </section>
+    <AIAssistant v-if="auth.isLoggedIn && auth.isStudent" />
   </div>
 </template>
 

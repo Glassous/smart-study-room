@@ -200,3 +200,25 @@ func (r *SeatRepo) ListCandidates(ctx context.Context, roomID int64, date, start
 	}
 	return list, rows.Err()
 }
+
+// ListFutureOccupancyWindows 为 AI 上下文提供匿名占用时段，不暴露预约用户。
+func (r *SeatRepo) ListFutureOccupancyWindows(ctx context.Context) ([]*model.SeatOccupancyWindow, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT seat_id, res_date::text, to_char(start_time, 'HH24:MI'), to_char(end_time, 'HH24:MI')
+		FROM reservations
+		WHERE status IN ('pending','checked_in','temp_leave') AND res_date >= current_date
+		ORDER BY res_date, start_time`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	list := []*model.SeatOccupancyWindow{}
+	for rows.Next() {
+		var item model.SeatOccupancyWindow
+		if err := rows.Scan(&item.SeatID, &item.Date, &item.StartTime, &item.EndTime); err != nil {
+			return nil, err
+		}
+		list = append(list, &item)
+	}
+	return list, rows.Err()
+}

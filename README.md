@@ -91,6 +91,22 @@ npm run dev            # 默认 http://localhost:5173
 
 默认管理员账号：`admin / admin123`（演示用）。
 
+### AI 助手配置
+
+学生登录后可通过右下角悬浮球打开 AI 助手。助手支持查询本人资料、信用状态、预约、候补和通知，也可根据自然语言偏好推荐座位；推荐结果必须由学生在卡片中再次确认，实际下单仍执行原有信用、时段和并发冲突校验。
+
+后端通过 OpenAI Chat Completions 兼容接口调用模型，至少配置：
+
+```bash
+STUDYROOM_AI_BASE_URL=https://api.openai.com/v1
+STUDYROOM_AI_API_KEY=your-key
+STUDYROOM_AI_MODEL=gpt-4o-mini
+```
+
+兼容服务需支持 SSE 流式输出及 tools/function calling。可选配置包括连接超时、响应超时和历史上下文条数，详见 `.env.example`。未配置 AI 时其他预约功能照常运行。
+
+AI 会话保存在 PostgreSQL 的 `ai_conversations`、`ai_messages` 表中。部署升级时需执行 `./scripts/apply_migrations.sh` 以应用 `002_ai_assistant.sql`。
+
 ## 项目结构
 
 ```
@@ -109,7 +125,7 @@ backend/
 │   └── service/      核心业务逻辑（预约、分配算法、生命周期、信用、统计）
 frontend/             Vue 3 前端应用
 docs/                 课程设计文档（可行性研究/范围说明/报告/需求/概要/详细/进度日志）
-diagrams/             系统分析设计图（Mermaid × 18：用例/架构/ER/类图/状态/时序/DFD 等）
+diagrams/             系统分析设计图（Mermaid × 21：用例/架构/ER/类图/状态/时序/DFD 等）
 scripts/              数据库与运维自动化脚本
 docker-compose.yml    PostgreSQL 18 + Redis 7 + 后端多容器编排
 ```
@@ -126,7 +142,7 @@ docker-compose.yml    PostgreSQL 18 + Redis 7 + 后端多容器编排
 | [00_可行性研究报告.md](docs/00_可行性研究报告.md) | 上述 Word 文档的 Markdown 源文件 |
 | [00_项目范围说明书.md](docs/00_项目范围说明书.md) | 上述 Word 文档的 Markdown 源文件 |
 | [01_课程设计报告.md](docs/01_课程设计报告.md) | 前言/系统概述/系统分析/系统设计/系统实现/收获体会 |
-| [02_需求规格说明书.md](docs/02_需求规格说明书.md) | 数据字典、FR-01~10、非功能需求 |
+| [02_需求规格说明书.md](docs/02_需求规格说明书.md) | 数据字典、FR-01~15、非功能需求 |
 | [03_概要设计说明书.md](docs/03_概要设计说明书.md) | 四层架构、接口设计、ER/物理结构 |
 | [04_详细设计说明书.md](docs/04_详细设计说明书.md) | 逐模块十要素、算法与测试要点 |
 | [05_开发进度日志.md](docs/05_开发进度日志.md) | 28 项活动记录与工时统计 |

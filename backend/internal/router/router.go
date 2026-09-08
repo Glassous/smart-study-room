@@ -33,6 +33,7 @@ func Setup(pool *pgxpool.Pool, rdb *redis.Client, cfg *config.Config) (*gin.Engi
 	notificationRepo := repository.NewNotificationRepo(pool)
 	waitlistRepo := repository.NewWaitlistRepo(pool)
 	statsRepo := repository.NewStatsRepo(pool)
+	aiRepo := repository.NewAIRepo(pool)
 
 	// 服务层
 	authService := service.NewAuthService(userRepo, cfg, rdb)
@@ -49,6 +50,8 @@ func Setup(pool *pgxpool.Pool, rdb *redis.Client, cfg *config.Config) (*gin.Engi
 	waitlistService := service.NewWaitlistService(waitlistRepo, seatRepo, reservationRepo, reservationService, notificationService)
 	statsService := service.NewStatsService(statsRepo, seatRepo, roomRepo)
 	statsService.SetCache(cacheHelper)
+	aiClient := service.NewAIClient(cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel, cfg.AIConnectTimeout, cfg.AIResponseTimeout)
+	aiService := service.NewAIService(aiRepo, userRepo, roomRepo, seatRepo, reservationRepo, notificationRepo, waitlistRepo, aiClient, cfg.AIContextMessages)
 
 	// 处理层
 	health := handler.NewHealthHandler(pool)
@@ -62,6 +65,7 @@ func Setup(pool *pgxpool.Pool, rdb *redis.Client, cfg *config.Config) (*gin.Engi
 	waitlist := handler.NewWaitlistHandler(waitlistService)
 	adminUser := handler.NewAdminUserHandler(userRepo)
 	stats := handler.NewStatsHandler(statsService)
+	ai := handler.NewAIHandler(aiService)
 
 	api := r.Group("/api")
 	{
@@ -89,6 +93,14 @@ func Setup(pool *pgxpool.Pool, rdb *redis.Client, cfg *config.Config) (*gin.Engi
 			authorized.POST("/reservations/:id/return", reservation.ReturnBack)
 			authorized.POST("/reservations/:id/checkout", reservation.Checkout)
 			authorized.GET("/credit", credit.Overview)
+			aiGroup := authorized.Group("/ai", middleware.RequireStudent())
+			{
+				aiGroup.GET("/conversations", ai.ListConversations)
+				aiGroup.POST("/conversations", ai.CreateConversation)
+				aiGroup.GET("/conversations/:id/messages", ai.ListMessages)
+				aiGroup.DELETE("/conversations/:id", ai.DeleteConversation)
+				aiGroup.POST("/chat/stream", middleware.RateLimitByUser(rdb, "ai_chat", 10, time.Minute), ai.Stream)
+			}
 			notifyGroup := authorized.Group("/notifications")
 			{
 				notifyGroup.GET("", notify.List)
