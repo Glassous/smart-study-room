@@ -237,7 +237,7 @@ onUnmounted(() => {
           :aria-expanded="!isSidebarCollapsed"
           @click="toggleSidebar"
         >
-          <AppIcon :name="isDesktopCollapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="18" />
+          <AppIcon :name="isDesktopCollapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="24" />
         </button>
       </div>
 
@@ -422,7 +422,7 @@ onUnmounted(() => {
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-4);
+  color: var(--text-3);
   position: absolute;
   right: 0;
   top: 10px;
@@ -441,7 +441,7 @@ onUnmounted(() => {
   left: 0;
 }
 .sidebar-toggle:hover {
-  color: var(--text-2);
+  color: var(--text-1);
   background: var(--surface-3);
 }
 .sidebar-toggle:focus-visible {

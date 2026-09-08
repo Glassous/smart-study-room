@@ -66,7 +66,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       title="展开侧栏"
       @click="openSidebar"
     >
-      <AppIcon name="sidebar-expand" :size="21" />
+      <AppIcon name="sidebar-expand" :size="24" />
     </button>
     <span v-else class="topbar-placeholder" />
 
