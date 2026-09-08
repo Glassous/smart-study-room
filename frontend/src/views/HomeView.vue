@@ -1,10 +1,11 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getRooms } from '../api/room'
 import { getOverview } from '../api/stats'
 import { getCreditOverview } from '../api/credit'
+import { unreadCount } from '../api/notification'
 import AppIcon from '../components/AppIcon.vue'
 
 const router = useRouter()
@@ -17,6 +18,8 @@ const helloText = computed(() => auth.isAdmin ? '欢迎回来，请查看今日�
 const rooms = ref([])
 const statsOverview = ref(null)
 const creditOverview = ref(null)
+const unread = ref(0)
+let unreadTimer = null
 
 const currentCredit = computed(() => creditOverview.value?.score ?? auth.user?.credit_score ?? 100)
 const totalSeats = computed(() => statsOverview.value?.total_seats ?? 158)
@@ -32,6 +35,16 @@ const openHours = computed(() => {
   }
   return { open: '08:00', close: '22:00' }
 })
+
+async function refreshUnread() {
+  if (!auth.isLoggedIn) return
+  try {
+    const resp = await unreadCount()
+    unread.value = resp.data?.count || 0
+  } catch (e) {
+    unread.value = 0
+  }
+}
 
 onMounted(async () => {
   try {
@@ -56,20 +69,42 @@ onMounted(async () => {
       // 降级使用默认值
     }
   }
+
+  refreshUnread()
+  unreadTimer = setInterval(refreshUnread, 30000)
+})
+
+onUnmounted(() => {
+  if (unreadTimer) {
+    clearInterval(unreadTimer)
+    unreadTimer = null
+  }
 })
 
 const shortcuts = computed(() => auth.isAdmin
   ? [
       { title: '热力图统计', desc: '座位利用率 · 高峰时段', icon: 'analytics', to: '/analytics', tone: 'warm' },
       { title: '管理端', desc: '自习室 · 座位 · 用户', icon: 'admin', to: '/admin', tone: 'primary' },
-      { title: '消息中心', desc: '通知公告 · 异常提醒', icon: 'notification', to: '/notifications', tone: 'success' },
+      {
+        title: '消息中心',
+        desc: unread.value > 0 ? `${unread.value} 条未读通知 · 点击查看` : '通知公告 · 异常提醒',
+        icon: unread.value > 0 ? 'notification' : 'notification-empty',
+        to: '/notifications',
+        tone: 'success'
+      },
       { title: '个人中心', desc: '查看管理员账户信息', icon: 'profile', to: '/profile', tone: 'violet' }
     ]
   : [
       { title: '座位预约', desc: '手动选座 · 智能分配', icon: 'booking', to: '/booking', tone: 'primary' },
       { title: '我的预约', desc: '签到 · 临时离开 · 签退', icon: 'reservations', to: '/mine', tone: 'success' },
       { title: '我的候补', desc: '查看排队与递补状态', icon: 'waitlist', to: '/waitlist', tone: 'warm' },
-      { title: '消息中心', desc: '预约结果 · 违约警告 · 递补', icon: 'notification', to: '/notifications', tone: 'violet' }
+      {
+        title: '消息中心',
+        desc: unread.value > 0 ? `${unread.value} 条未读消息 · 点击查看` : '预约结果 · 违约警告 · 递补',
+        icon: unread.value > 0 ? 'notification' : 'notification-empty',
+        to: '/notifications',
+        tone: 'violet'
+      }
     ])
 const cardToneClass = {
   primary: 'tone-primary',
