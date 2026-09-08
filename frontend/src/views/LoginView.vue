@@ -1,10 +1,12 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from '../components/ui/feedback'
 import { login, register } from '../api/auth'
 import { useAuthStore } from '../stores/auth'
 import AppIcon from '../components/AppIcon.vue'
+import SButton from '../components/ui/SButton.vue'
+import SInput from '../components/ui/SInput.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -18,14 +20,14 @@ const regForm = reactive({ username: '', password: '', confirm: '', real_name: '
 
 async function onLogin() {
   if (!loginForm.username || !loginForm.password) {
-    ElMessage.warning('请输入用户名与口令')
+    message.warning('请输入用户名与口令')
     return
   }
   loading.value = true
   try {
     const resp = await login(loginForm)
     auth.setLogin(resp.data)
-    ElMessage.success('登录成功')
+    message.success('登录成功')
     router.push(route.query.redirect || '/')
   } finally {
     loading.value = false
@@ -35,15 +37,15 @@ async function onLogin() {
 async function onRegister() {
   const f = regForm
   if (!f.username || !f.password || !f.real_name) {
-    ElMessage.warning('请完整填写必填项')
+    message.warning('请完整填写必填项')
     return
   }
   if (f.password.length < 6) {
-    ElMessage.warning('口令至少 6 位')
+    message.warning('口令至少 6 位')
     return
   }
   if (f.password !== f.confirm) {
-    ElMessage.warning('两次输入的口令不一致')
+    message.warning('两次输入的口令不一致')
     return
   }
   loading.value = true
@@ -54,130 +56,343 @@ async function onRegister() {
       real_name: f.real_name,
       student_no: f.student_no
     })
-    ElMessage.success('注册成功，请登录')
+    message.success('注册成功，请登录')
     loginForm.username = f.username
     mode.value = 'login'
   } finally {
     loading.value = false
   }
 }
+
+const features = [
+  { icon: 'booking', title: '可视化选座', desc: '平面图实时选座，冲突自动检测' },
+  { icon: 'sparkles', title: '智能分配', desc: '按区域与偏好加权推荐最优座位' },
+  { icon: 'waitlist', title: '候补递补', desc: '满座自动排队，空位按序递补' },
+  { icon: 'credit', title: '信用治理', desc: '履约加分，违约扣分，公平利用' }
+]
 </script>
 
 <template>
-  <div class="login-wrap">
-    <div class="login-card">
-      <h1 class="title"><AppIcon name="book" :size="28" />智能共享自习室</h1>
-      <p class="subtitle">座位预约 · 智能分配 · 信用治理</p>
+  <div class="auth-shell">
+    <!-- ============ 左侧：品牌叙事 ============ -->
+    <aside class="auth-hero">
+      <div class="hero-brand">
+        <div class="hero-mark"><AppIcon name="book" :size="20" /></div>
+        <div>
+          <div class="hero-name">智能共享自习室</div>
+          <div class="hero-sub">Smart Study Room</div>
+        </div>
+      </div>
 
-      <el-tabs v-model="mode" stretch>
-        <el-tab-pane label="登录" name="login">
-          <el-form @submit.prevent>
-            <el-form-item>
-              <el-input v-model="loginForm.username" placeholder="用户名" size="large" />
-            </el-form-item>
-            <el-form-item>
-              <el-input
-                v-model="loginForm.password"
-                type="password"
-                placeholder="口令"
-                size="large"
-                show-password
-                @keyup.enter="onLogin"
-              />
-            </el-form-item>
-            <el-button type="primary" size="large" class="submit" :loading="loading" @click="onLogin">
-              登 录
-            </el-button>
-          </el-form>
-        </el-tab-pane>
+      <div class="hero-body">
+        <h1 class="hero-title">让每一次自习<br />都有理想的位置</h1>
+        <p class="hero-desc">座位预约 · 智能分配 · 信用治理 —— 面向校园的一站式自习室数字化系统。</p>
 
-        <el-tab-pane label="注册" name="register">
-          <el-form @submit.prevent>
-            <el-form-item>
-              <el-input v-model="regForm.username" placeholder="用户名(≥3位)" size="large" />
-            </el-form-item>
-            <el-form-item>
-              <el-input v-model="regForm.real_name" placeholder="真实姓名" size="large" />
-            </el-form-item>
-            <el-form-item>
-              <el-input v-model="regForm.student_no" placeholder="学号(选填)" size="large" />
-            </el-form-item>
-            <el-form-item>
-              <el-input v-model="regForm.password" type="password" placeholder="口令(≥6位)" size="large" show-password />
-            </el-form-item>
-            <el-form-item>
-              <el-input v-model="regForm.confirm" type="password" placeholder="确认口令" size="large" show-password />
-            </el-form-item>
-            <el-button type="primary" size="large" class="submit" :loading="loading" @click="onRegister">
-              注 册
-            </el-button>
-          </el-form>
-        </el-tab-pane>
-      </el-tabs>
+        <ul class="hero-features">
+          <li v-for="f in features" :key="f.title">
+            <span class="feature-icon"><AppIcon :name="f.icon" :size="18" /></span>
+            <div>
+              <div class="feature-title">{{ f.title }}</div>
+              <div class="feature-desc">{{ f.desc }}</div>
+            </div>
+          </li>
+        </ul>
+      </div>
 
-      <p class="tip">演示账号：stu01 / 123456 · 管理员：admin / admin123</p>
-    </div>
+      <div class="hero-foot">智能共享自习室预约系统 · 课程设计演示环境</div>
+    </aside>
+
+    <!-- ============ 右侧：登录 / 注册 ============ -->
+    <main class="auth-panel">
+      <div class="auth-card">
+        <div class="seg seg-block" role="tablist" aria-label="登录或注册">
+          <button
+            class="seg-btn"
+            role="tab"
+            :class="{ active: mode === 'login' }"
+            :aria-selected="mode === 'login'"
+            @click="mode = 'login'"
+          >
+            登录
+          </button>
+          <button
+            class="seg-btn"
+            role="tab"
+            :class="{ active: mode === 'register' }"
+            :aria-selected="mode === 'register'"
+            @click="mode = 'register'"
+          >
+            注册
+          </button>
+        </div>
+
+        <form v-if="mode === 'login'" class="auth-form" @submit.prevent="onLogin">
+          <div class="form-field">
+            <label class="form-label" for="login-username">用户名</label>
+            <SInput id="login-username" v-model="loginForm.username" size="lg" placeholder="用户名" autocomplete="username" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="login-password">口令</label>
+            <SInput
+              id="login-password"
+              v-model="loginForm.password"
+              type="password"
+              size="lg"
+              placeholder="口令"
+              show-password
+              autocomplete="current-password"
+              @keyup.enter="onLogin"
+            />
+          </div>
+          <SButton type="submit" variant="primary" size="lg" block :loading="loading">
+            登录
+          </SButton>
+        </form>
+
+        <form v-else class="auth-form" @submit.prevent="onRegister">
+          <div class="form-field">
+            <label class="form-label" for="reg-username">用户名</label>
+            <SInput id="reg-username" v-model="regForm.username" size="lg" placeholder="用户名（≥3 位）" autocomplete="username" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="reg-realname">真实姓名</label>
+            <SInput id="reg-realname" v-model="regForm.real_name" size="lg" placeholder="真实姓名" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="reg-studentno">学号（选填）</label>
+            <SInput id="reg-studentno" v-model="regForm.student_no" size="lg" placeholder="学号（选填）" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="reg-password">口令</label>
+            <SInput id="reg-password" v-model="regForm.password" type="password" size="lg" placeholder="口令（≥6 位）" show-password autocomplete="new-password" />
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="reg-confirm">确认口令</label>
+            <SInput id="reg-confirm" v-model="regForm.confirm" type="password" size="lg" placeholder="再次输入口令" show-password autocomplete="new-password" />
+          </div>
+          <SButton type="submit" variant="primary" size="lg" block :loading="loading">
+            注册
+          </SButton>
+        </form>
+
+        <p class="auth-tip">
+          演示账号：stu01 / 123456 · 管理员：admin / admin123
+        </p>
+      </div>
+    </main>
   </div>
 </template>
 
 <style scoped>
-.login-wrap {
+.auth-shell {
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* 同色系(hue≈215°雾霾蓝灰) + 低饱和(22%~30%)渐变：仅靠明度变化营造层次 */
-  background:
-    radial-gradient(ellipse at 20% 15%, rgba(255, 255, 255, 0.55), transparent 55%),
-    linear-gradient(135deg, #eff3f8 0%, #dce4ee 55%, #bfcbdc 100%);
+  display: grid;
+  grid-template-columns: minmax(420px, 46%) 1fr;
+  background: var(--canvas);
+}
+
+/* ============ 左侧品牌区 ============ */
+.auth-hero {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 44px 52px 28px;
+  background:
+    radial-gradient(circle at 88% 6%, rgba(59, 102, 218, .07), transparent 42%),
+    radial-gradient(circle at 4% 92%, rgba(31, 145, 96, .05), transparent 40%),
+    var(--surface);
+  border-right: 1px solid var(--border);
   overflow: hidden;
 }
-.login-wrap::before {
-  /* 极淡的同色系柔光叠加，增加呼吸感 */
+
+.auth-hero::before {
   content: '';
   position: absolute;
-  inset: -20%;
-  background:
-    radial-gradient(circle at 80% 85%, rgba(180, 198, 220, 0.45), transparent 50%);
-  filter: blur(20px);
+  inset: 0;
+  background-image: radial-gradient(rgba(28, 37, 52, .05) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: linear-gradient(to bottom, transparent 12%, #000 42%, #000 78%, transparent);
   pointer-events: none;
 }
-.login-card {
+
+.hero-brand {
   position: relative;
-  width: 400px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: saturate(140%) blur(8px);
-  border-radius: 14px;
-  padding: 32px 36px;
-  /* 阴影改用同色系冷灰，低饱和背景下更和谐 */
-  box-shadow:
-    0 1px 2px rgba(108, 128, 160, 0.06),
-    0 12px 40px rgba(108, 128, 160, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.title {
+
+.hero-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-lg);
+  background: var(--primary);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 4px 12px rgba(59, 102, 218, .32);
+}
+
+.hero-name {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text-1);
+  letter-spacing: -.01em;
+}
+
+.hero-sub {
+  font-size: 10.5px;
+  color: var(--text-4);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+.hero-body {
+  position: relative;
+  padding: 24px 0;
+}
+
+.hero-title {
+  font-size: clamp(28px, 3.2vw, 38px);
+  line-height: 1.28;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--text-1);
+}
+
+.hero-desc {
+  margin-top: 14px;
+  font-size: var(--fs-body);
+  line-height: 1.75;
+  color: var(--text-3);
+  max-width: 40ch;
+}
+
+.hero-features {
+  list-style: none;
+  margin: 34px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+
+.hero-features li {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+
+.feature-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+}
+
+.feature-title {
+  font-size: var(--fs-body-sm);
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.feature-desc {
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+.hero-foot {
+  position: relative;
+  font-size: var(--fs-caption);
+  color: var(--text-4);
+}
+
+/* ============ 右侧表单区 ============ */
+.auth-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  text-align: center;
-  margin: 0 0 4px;
-  color: #303133;
+  padding: 32px 24px;
+  overflow-y: auto;
 }
-.subtitle {
-  text-align: center;
-  color: #909399;
-  margin: 0 0 18px;
-  font-size: 13px;
+
+.auth-card {
+  width: 400px;
+  max-width: 100%;
 }
-.submit {
-  width: 100%;
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 22px;
 }
-.tip {
-  margin-top: 14px;
-  font-size: 12px;
-  color: #909399;
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-label {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: .02em;
+}
+
+.auth-form .s-btn {
+  margin-top: 6px;
+}
+
+.auth-tip {
+  margin-top: 18px;
+  font-size: var(--fs-caption);
+  color: var(--text-4);
   text-align: center;
+  line-height: 1.7;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* ============ 响应式 ============ */
+@media (max-width: 920px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+  .auth-hero {
+    display: none;
+  }
+  .auth-panel {
+    background:
+      radial-gradient(circle at 85% 4%, rgba(59, 102, 218, .06), transparent 44%),
+      var(--canvas);
+  }
+  .auth-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-2);
+    padding: 26px 24px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-panel {
+    padding: 20px 14px;
+    align-items: flex-start;
+    padding-top: max(20px, 8vh);
+  }
+  .auth-card {
+    padding: 20px 16px 16px;
+  }
 }
 </style>

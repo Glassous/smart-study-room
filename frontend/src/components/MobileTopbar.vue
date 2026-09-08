@@ -160,7 +160,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   top: 18px;
   max-width: calc(100vw - 144px);
   overflow: hidden;
-  color: #2f3f56;
+  color: var(--text-1);
   font-size: 21px;
   font-weight: 700;
   line-height: 28px;
@@ -175,7 +175,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 .quick-menu-shell:not(.expanded) {
   border: 0;
   background: transparent;
-  color: #35465e;
+  color: var(--text-2);
   box-shadow: none;
 }
 .topbar-action {
@@ -195,13 +195,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 .topbar-action:hover,
 .quick-menu-shell:not(.expanded):hover,
 .quick-menu-trigger:hover {
-  color: #203149;
-  background: rgba(0, 0, 0, .05);
+  color: var(--text-1);
+  background: rgba(28, 37, 52, .06);
 }
 .topbar-action:focus-visible,
 .quick-menu-trigger:focus-visible,
 .quick-menu-item:focus-visible {
-  outline: 3px solid rgba(100, 116, 139, .22);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 .topbar-placeholder {
@@ -231,9 +231,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 .quick-menu-shell.expanded {
   width: 228px;
   height: var(--quick-menu-height);
-  border-radius: 16px;
-  border: 1px solid #94a3b8;
-  background: #fff;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
 }
 .quick-menu-trigger {
   appearance: none;
@@ -272,8 +273,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   display: flex;
   align-items: center;
   font-size: 13px;
-  font-weight: 700;
-  color: #445269;
+  font-weight: 650;
+  color: var(--text-1);
   white-space: nowrap;
 }
 .quick-menu-list {
@@ -293,9 +294,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   align-items: center;
   gap: 9px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   background: transparent;
-  color: #526075;
+  color: var(--text-2);
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -304,8 +305,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   transition: color .14s ease, background .14s ease;
 }
 .quick-menu-item:hover {
-  color: #27384f;
-  background: #eef2f7;
+  color: var(--text-1);
+  background: var(--surface-hover);
 }
 .quick-menu-icon {
   width: 30px;
@@ -313,7 +314,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   flex: 0 0 30px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  background: #f3f6fa;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
 }
 </style>

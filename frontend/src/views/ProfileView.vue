@@ -2,15 +2,18 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { getCreditOverview } from '../api/credit'
+import SEmpty from '../components/ui/SEmpty.vue'
+import SGauge from '../components/ui/SGauge.vue'
+import SBanner from '../components/ui/SBanner.vue'
 
 const auth = useAuthStore()
 const overview = ref(null)
 
 const scoreColor = computed(() => {
   const s = overview.value?.score ?? 100
-  if (s >= 80) return '#5fa655'
-  if (s >= 60) return '#c78941'
-  return '#c86a6a'
+  if (s >= 80) return 'var(--green)'
+  if (s >= 60) return 'var(--amber)'
+  return 'var(--red)'
 })
 
 const banned = computed(() => {
@@ -27,7 +30,10 @@ onMounted(async () => {
 
 <template>
   <div class="page-view">
-    <header class="view-heading" data-page-title><h1>个人中心</h1></header>
+    <header class="view-heading" data-page-title>
+      <h1>个人中心</h1>
+      <p class="heading-sub">账户信息与信用分记录</p>
+    </header>
     <div class="split profile-split" :class="{ 'profile-admin': auth.isAdmin }">
     <div class="split-left">
       <!-- 用户卡片 -->
@@ -37,10 +43,10 @@ onMounted(async () => {
         </div>
         <div class="profile-name">{{ auth.user?.real_name || auth.user?.username }}</div>
         <div class="profile-sub">@{{ auth.user?.username }}</div>
-        <div style="margin-top: 8px">
-          <el-tag size="small" effect="plain" :type="auth.isAdmin ? 'danger' : 'primary'">
+        <div style="margin-top: 10px">
+          <span class="role-pill" :class="auth.isAdmin ? 'role-pill--admin' : 'role-pill--student'">
             {{ auth.isAdmin ? '管理员' : '学生' }}
-          </el-tag>
+          </span>
         </div>
       </section>
 
@@ -51,26 +57,26 @@ onMounted(async () => {
         <div class="info-row"><span>用户名</span><b>{{ auth.user?.username || '—' }}</b></div>
         <div v-if="auth.isStudent" class="info-row"><span>学号</span><b>{{ auth.user?.student_no || '—' }}</b></div>
         <div class="info-row"><span>角色</span><b>{{ auth.isAdmin ? '管理员' : '学生' }}</b></div>
-        <div class="info-row"><span>账号状态</span><b>{{ auth.user?.status === 'active' ? '正常' : '已禁用' }}</b></div>
+        <div class="info-row"><span>账号状态</span><b :class="{ 'status-off': auth.user?.status !== 'active' }">{{ auth.user?.status === 'active' ? '正常' : '已禁用' }}</b></div>
       </section>
 
       <!-- 信用卡 -->
       <section v-if="auth.isStudent" class="card responsive-compact">
         <div class="card-title-row"><h3>我的信用</h3></div>
         <div v-if="overview" class="credit-box">
-          <el-progress type="dashboard" :percentage="overview.score" :color="scoreColor" :width="152">
-            <template #default>
-              <div class="score-num" :style="{ color: scoreColor }">{{ overview.score }}</div>
-              <div class="score-label">信用分</div>
-            </template>
-          </el-progress>
-          <el-alert
+          <SGauge :value="overview.score" :color="scoreColor" :size="152">
+            <div class="score-num" :style="{ color: scoreColor }">{{ overview.score }}</div>
+            <div class="score-label">信用分</div>
+          </SGauge>
+          <SBanner
             v-if="banned"
-            type="error" :closable="false" style="margin-top: 12px"
+            type="error"
+            style="margin-top: 14px; width: 100%"
             :title="`信用分低于 60，禁止预约至 ${banned}`"
           />
-          <el-alert
-            v-else type="success" :closable="false" style="margin-top: 12px"
+          <SBanner
+            v-else type="success"
+            style="margin-top: 14px; width: 100%"
             title="信用状态正常，可正常预约"
           />
           <div class="rule-tip">
@@ -86,25 +92,33 @@ onMounted(async () => {
           <h3>信用分流水</h3>
           <span class="muted">最新 {{ overview?.logs?.length || 0 }} 条记录</span>
         </div>
-        <div class="responsive-scroll" tabindex="0" aria-label="信用分流水表格，可左右滑动">
-        <el-table :data="overview?.logs || []" stripe max-height="600" class="credit-table">
-          <el-table-column label="时间" width="180">
-            <template #default="{ row }">{{ new Date(row.created_at).toLocaleString('zh-CN', { hour12: false }) }}</template>
-          </el-table-column>
-          <el-table-column label="变动" width="100">
-            <template #default="{ row }">
-              <span :class="row.delta > 0 ? 'up' : 'down'">
-                {{ row.delta > 0 ? '+' + row.delta : row.delta }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column label="事由" prop="reason" min-width="260" />
-          <el-table-column label="关联预约" width="110">
-            <template #default="{ row }">#{{ row.reservation_id ?? '—' }}</template>
-          </el-table-column>
-        </el-table>
+        <div class="table-wrap">
+          <div class="table-scroll" tabindex="0" aria-label="信用分流水表格，可左右滑动">
+            <table class="table credit-table">
+              <thead>
+                <tr>
+                  <th style="width:180px">时间</th>
+                  <th style="width:100px">变动</th>
+                  <th style="min-width:240px">事由</th>
+                  <th style="width:110px">关联预约</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in overview?.logs || []" :key="row.id">
+                  <td class="num">{{ new Date(row.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
+                  <td>
+                    <span :class="row.delta > 0 ? 'up' : 'down'">
+                      {{ row.delta > 0 ? '+' + row.delta : row.delta }}
+                    </span>
+                  </td>
+                  <td>{{ row.reason }}</td>
+                  <td class="num">#{{ row.reservation_id ?? '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <SEmpty v-if="!overview?.logs?.length" description="暂无信用记录" />
+          </div>
         </div>
-        <el-empty v-if="!overview?.logs?.length" description="暂无信用记录" />
       </section>
     </div>
     </div>
@@ -113,7 +127,7 @@ onMounted(async () => {
 
 <style scoped>
 .profile-split { grid-template-columns: 320px 1fr; }
-.credit-table { min-width: 650px; }
+.credit-table { min-width: 640px; }
 .profile-split.profile-admin {
   grid-template-columns: minmax(320px, 520px);
   justify-content: start;
@@ -121,50 +135,91 @@ onMounted(async () => {
 
 .profile-card {
   text-align: center;
-  background: linear-gradient(150deg, #eef3f9, #fbfcfe);
+  background: var(--surface-2);
 }
 .avatar-lg {
-  width: 76px; height: 76px; border-radius: 22px;
-  background: linear-gradient(145deg, #8ea6c4, #5f7ea3);
-  color: #fff;
-  display: grid; place-items: center;
-  font-size: 32px; font-weight: 700;
-  margin: 4px auto 12px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 10px 22px rgba(95,126,163,.22);
+  width: 76px;
+  height: 76px;
+  border-radius: var(--r-2xl);
+  background: var(--primary-weak);
+  color: var(--primary-active);
+  display: grid;
+  place-items: center;
+  font-size: 32px;
+  font-weight: 700;
+  margin: 6px auto 14px;
 }
 .profile-name {
-  font-size: 18px; font-weight: 700; color: #2b3240;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text-1);
+  letter-spacing: -.01em;
 }
 .profile-sub {
-  font-size: 12.5px; color: #828c9d; margin-top: 2px;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+  margin-top: 3px;
+}
+.role-pill {
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+}
+.role-pill--student {
+  background: var(--primary-weak);
+  color: var(--primary-active);
+}
+.role-pill--admin {
+  background: var(--red-weak);
+  color: var(--red-strong);
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 9px 0;
-  border-bottom: 1px dashed #eef1f6;
-  font-size: 13.5px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--fs-body-sm);
 }
 .info-row:last-child { border-bottom: none; }
-.info-row span { color: #828c9d; }
-.info-row b { color: #2b3240; font-weight: 600; }
+.info-row span { color: var(--text-3); }
+.info-row b { color: var(--text-1); font-weight: 600; }
+.info-row b.status-off { color: var(--red-strong); }
 
 .credit-box {
-  display: flex; flex-direction: column;
-  align-items: center; padding: 8px 0 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0 4px;
 }
-.score-num { font-size: 30px; font-weight: 700; line-height: 1; }
+.score-num {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 .score-label {
-  font-size: 12px; color: #828c9d; margin-top: 2px;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+  margin-top: 3px;
 }
 .rule-tip {
-  margin-top: 12px; padding: 10px 12px;
-  background: #f6f8fb; border-radius: 10px;
-  font-size: 12px; color: #6b7280; line-height: 1.6;
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--surface-3);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+  line-height: 1.6;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
 }
 
-.up   { color: #5fa655; font-weight: 700; }
-.down { color: #c86a6a; font-weight: 700; }
+.up   { color: var(--green-strong); font-weight: 700; font-variant-numeric: tabular-nums; }
+.down { color: var(--red-strong); font-weight: 700; font-variant-numeric: tabular-nums; }
 </style>

@@ -1,8 +1,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { message, confirmDialog } from '../components/ui/feedback'
 import { listMyWaitlist, cancelWaitlist } from '../api/waitlist'
 import AppIcon from '../components/AppIcon.vue'
+import SButton from '../components/ui/SButton.vue'
+import STag from '../components/ui/STag.vue'
+import SEmpty from '../components/ui/SEmpty.vue'
+import SBanner from '../components/ui/SBanner.vue'
 
 const list = ref([])
 const loading = ref(false)
@@ -28,10 +32,10 @@ async function load() {
 
 async function doCancel(row) {
   try {
-    await ElMessageBox.confirm('确认退出该场次候补队列？', '取消候补', { type: 'warning' })
+    await confirmDialog('确认退出该场次候补队列？', '取消候补', { type: 'warning' })
   } catch { return }
   await cancelWaitlist(row.id)
-  ElMessage.success('已退出候补')
+  message.success('已退出候补')
   load()
 }
 
@@ -65,11 +69,17 @@ onMounted(load)
 
 <template>
   <div class="page-view">
-    <header class="view-heading" data-page-title><h1>我的候补</h1></header>
+    <header class="view-heading" data-page-title>
+      <h1>我的候补</h1>
+      <p class="heading-sub">满座时段自动排队，空位释放后按序递补</p>
+    </header>
     <div class="split wl-split">
     <div class="split-left">
       <section class="card responsive-compact">
-        <div class="card-title-row"><h3>候补概览</h3><el-button size="small" @click="load"><AppIcon name="refresh" :size="15" />刷新</el-button></div>
+        <div class="card-title-row">
+          <h3>候补概览</h3>
+          <SButton size="sm" variant="secondary" @click="load"><AppIcon name="refresh" :size="14" />刷新</SButton>
+        </div>
         <div class="kpi-grid">
           <div class="kpi"><div class="kpi-num">{{ buckets.all }}</div><div class="kpi-label">历史候补</div></div>
           <div class="kpi kpi-warn"><div class="kpi-num">{{ buckets.waiting }}</div><div class="kpi-label">正在排队</div></div>
@@ -80,19 +90,19 @@ onMounted(load)
 
       <section class="card responsive-compact">
         <div class="card-title-row"><h3>状态分类</h3></div>
-        <div class="nav-list">
+        <nav class="side-nav">
           <button
             v-for="n in nav"
             :key="n.key"
-            class="nav-btn"
+            class="side-nav-item"
             :class="{ active: filterStatus === n.key }"
             @click="filterStatus = n.key"
           >
-            <span class="nav-icon"><AppIcon :name="n.icon" :size="17" /></span>
-            <span class="nav-label">{{ n.label }}</span>
-            <span class="nav-count">{{ buckets[n.key] ?? 0 }}</span>
+            <span class="side-nav-icon"><AppIcon :name="n.icon" :size="16" /></span>
+            <span class="side-nav-label">{{ n.label }}</span>
+            <span class="side-nav-count">{{ buckets[n.key] ?? 0 }}</span>
           </button>
-        </div>
+        </nav>
       </section>
 
       <section class="card responsive-compact">
@@ -109,47 +119,53 @@ onMounted(load)
     <div class="split-right">
       <section class="card">
         <div class="card-title-row">
-          <h3>候补记录 <span class="muted" style="font-weight:400;margin-left:8px">（共 {{ filtered.length }} 条）</span></h3>
+          <h3>候补记录 <span class="muted">共 {{ filtered.length }} 条</span></h3>
         </div>
-        <el-alert type="info" :closable="false" style="margin-bottom: 14px"
-          title="满座时段提交候补后，系统会在空位释放时自动按排队顺序递补，并通过站内消息通知您。" />
+        <SBanner type="info" style="margin-bottom: 14px">
+          满座时段提交候补后，系统会在空位释放时自动按排队顺序递补，并通过站内消息通知您。
+        </SBanner>
 
-        <div class="responsive-scroll" tabindex="0" aria-label="候补记录表格，可左右滑动">
-        <el-table v-loading="loading" :data="filtered" stripe class="waitlist-table" max-height="560">
-          <el-table-column label="日期" width="110">
-            <template #default="{ row }">{{ row.res_date }}</template>
-          </el-table-column>
-          <el-table-column label="时段" width="130">
-            <template #default="{ row }">{{ row.start_time.slice(0, 5) }} - {{ row.end_time.slice(0, 5) }}</template>
-          </el-table-column>
-          <el-table-column label="自习室" prop="room_name" min-width="130" />
-          <el-table-column label="偏好" min-width="120">
-            <template #default="{ row }">{{ prefText(row) }}</template>
-          </el-table-column>
-          <el-table-column label="排队位次" width="100">
-            <template #default="{ row }">
-              <b v-if="row.status === 'waiting'">第 {{ row.position }} 位</b>
-              <span v-else class="dim">—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="98">
-            <template #default="{ row }">
-              <el-tag size="small" :type="statusMeta[row.status]?.type">
-                {{ statusMeta[row.status]?.text || row.status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="100">
-            <template #default="{ row }">
-              <el-button v-if="row.status === 'waiting'" size="small" type="danger" plain @click="doCancel(row)">
-                退出
-              </el-button>
-              <span v-else class="dim">—</span>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-wrap">
+          <div class="table-scroll" v-loading="loading" tabindex="0" aria-label="候补记录表格，可左右滑动">
+            <table class="table waitlist-table">
+              <thead>
+                <tr>
+                  <th style="width:110px">日期</th>
+                  <th style="width:130px">时段</th>
+                  <th style="min-width:130px">自习室</th>
+                  <th style="min-width:120px">偏好</th>
+                  <th style="width:100px">排队位次</th>
+                  <th style="width:98px">状态</th>
+                  <th style="width:90px">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in filtered" :key="row.id">
+                  <td class="num">{{ row.res_date }}</td>
+                  <td class="num">{{ row.start_time.slice(0, 5) }} - {{ row.end_time.slice(0, 5) }}</td>
+                  <td class="ellip">{{ row.room_name }}</td>
+                  <td class="ellip">{{ prefText(row) }}</td>
+                  <td>
+                    <b v-if="row.status === 'waiting'" class="position-num">第 {{ row.position }} 位</b>
+                    <span v-else class="cell-dim">—</span>
+                  </td>
+                  <td>
+                    <STag :type="statusMeta[row.status]?.type" dot :line="row.status === 'cancelled' || row.status === 'expired'">
+                      {{ statusMeta[row.status]?.text || row.status }}
+                    </STag>
+                  </td>
+                  <td>
+                    <SButton v-if="row.status === 'waiting'" size="sm" variant="soft-danger" @click="doCancel(row)">
+                      退出
+                    </SButton>
+                    <span v-else class="cell-dim">—</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <SEmpty v-if="!filtered.length && !loading" description="当前分类下暂无候补记录" />
+          </div>
         </div>
-        <el-empty v-if="!filtered.length && !loading" description="当前分类下暂无候补记录" />
       </section>
     </div>
     </div>
@@ -158,45 +174,9 @@ onMounted(load)
 
 <style scoped>
 .wl-split { grid-template-columns: 300px 1fr; }
-.waitlist-table { min-width: 888px; }
-.kpi-warn .kpi-num { color: #d49a3a; }
-.kpi-ok   .kpi-num { color: #5fa655; }
-
-.nav-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.waitlist-table { min-width: 790px; }
+.position-num {
+  color: var(--amber-strong);
+  font-variant-numeric: tabular-nums;
 }
-.nav-btn {
-  all: unset;
-  cursor: pointer;
-  display: grid;
-  grid-template-columns: 24px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 9px 12px;
-  border-radius: 10px;
-  transition: background .15s ease;
-}
-.nav-btn:hover { background: #eef2f8; }
-.nav-btn.active {
-  background: linear-gradient(135deg, #cfdae8, #e3eaf4);
-  color: #2f4462; font-weight: 600;
-  box-shadow: inset 0 1px 0 #fff;
-}
-.nav-icon { text-align: center; }
-.nav-label { font-size: 13.5px; color: #465065; }
-.nav-count {
-  font-size: 12px; padding: 1px 8px; border-radius: 999px;
-  background: #e5e9f0; color: #6b7280;
-}
-.nav-btn.active .nav-count { background: #fff; color: #456388; }
-
-.tips {
-  margin: 0; padding-left: 18px;
-  display: flex; flex-direction: column; gap: 6px;
-  color: #4b5567; font-size: 13px; line-height: 1.6;
-}
-.tips b { color: #456388; font-weight: 600; }
-.dim { color: #c0c4cc; }
 </style>

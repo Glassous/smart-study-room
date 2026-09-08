@@ -14,7 +14,18 @@ const notifStore = useNotificationStore()
 
 const who = computed(() => auth.user?.real_name || auth.user?.username || '同学')
 const roleText = computed(() => (auth.isAdmin ? '管理员' : '学生'))
-const helloText = computed(() => auth.isAdmin ? '欢迎回来，请查看今日运营情况' : '今天也要高效学习')
+const helloText = computed(() => (auth.isAdmin ? '欢迎回来，请查看今日运营情况' : '今天也要高效学习'))
+const todayText = computed(() =>
+  new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
+)
+const greeting = computed(() => {
+  const h = new Date().getHours()
+  if (h < 6) return '夜深了'
+  if (h < 12) return '早上好'
+  if (h < 14) return '中午好'
+  if (h < 18) return '下午好'
+  return '晚上好'
+})
 
 const rooms = ref([])
 const statsOverview = ref(null)
@@ -82,7 +93,7 @@ const shortcuts = computed(() => auth.isAdmin
       { title: '管理端', desc: '自习室 · 座位 · 用户', icon: 'admin', to: '/admin', tone: 'primary' },
       {
         title: '消息中心',
-        desc: unread.value > 0 ? `${unread.value} 条未读通知 · 点击查看` : '通知公告 · 异常提醒',
+        desc: unread.value > 0 ? `${unread.value} 条未读通知` : '通知公告 · 异常提醒',
         icon: unread.value > 0 ? 'notification' : 'notification-empty',
         to: '/notifications',
         tone: 'success'
@@ -95,7 +106,7 @@ const shortcuts = computed(() => auth.isAdmin
       { title: '我的候补', desc: '查看排队与递补状态', icon: 'waitlist', to: '/waitlist', tone: 'warm' },
       {
         title: '消息中心',
-        desc: unread.value > 0 ? `${unread.value} 条未读消息 · 点击查看` : '预约结果 · 违约警告 · 递补',
+        desc: unread.value > 0 ? `${unread.value} 条未读消息` : '预约结果 · 违约警告 · 递补',
         icon: unread.value > 0 ? 'notification' : 'notification-empty',
         to: '/notifications',
         tone: 'violet'
@@ -111,29 +122,18 @@ const cardToneClass = {
 
 <template>
   <div class="page-view">
-    <header class="view-heading" data-page-title><h1>首页</h1></header>
+    <header class="view-heading" data-page-title>
+      <h1>{{ greeting }}，{{ who }}</h1>
+      <p class="heading-sub">{{ todayText }} · {{ helloText }}</p>
+    </header>
     <!-- 首页：页面级双栏 -->
     <div class="split home-split">
-    <!-- 左栏：欢迎 + 账户 KPI + 快速贴士 -->
+    <!-- 左栏：账户 KPI + 快速贴士 -->
     <div class="split-left">
-      <section class="card welcome-card">
-        <div class="hello">
-          <div class="hello-avatar">{{ who.slice(0, 1) }}</div>
-          <div>
-            <div class="hello-role">
-              <el-tag size="small" effect="plain" :type="auth.isAdmin ? 'danger' : 'primary'">
-                {{ roleText }}
-              </el-tag>
-            </div>
-            <h2 class="hello-name">你好，{{ who }}</h2>
-            <p class="hello-sub">{{ helloText }}</p>
-          </div>
-        </div>
-      </section>
-
       <section v-if="auth.isStudent" class="card overview-card">
         <div class="card-title-row">
           <h3>账户概览</h3>
+          <span class="role-pill" :class="auth.isAdmin ? 'role-pill--admin' : 'role-pill--student'">{{ roleText }}</span>
         </div>
         <div class="kpi-grid">
           <div class="kpi">
@@ -144,14 +144,16 @@ const cardToneClass = {
             <div class="kpi-num">{{ roomCount }}</div>
             <div class="kpi-label">自习室可用</div>
           </div>
-          <div class="kpi">
+          <div class="kpi kpi-ok">
             <div class="kpi-num">
               {{ availableSeats }}<span class="kpi-slash">/</span><span class="kpi-total">{{ totalSeats }}</span>
             </div>
             <div class="kpi-label">可用座位</div>
           </div>
           <div class="kpi">
-            <div class="kpi-num">{{ openHours.open }}<br/><span style="font-size:11px;font-weight:500">~ {{ openHours.close }}</span></div>
+            <div class="kpi-num kpi-time">
+              {{ openHours.open }}<span class="kpi-tilde">~</span>{{ openHours.close }}
+            </div>
             <div class="kpi-label">今日开放</div>
           </div>
         </div>
@@ -160,13 +162,14 @@ const cardToneClass = {
       <section v-else class="card overview-card">
         <div class="card-title-row">
           <h3>管理概览</h3>
+          <span class="role-pill role-pill--admin">管理员</span>
         </div>
         <div class="kpi-grid">
           <div class="kpi">
             <div class="kpi-num">{{ roomCount }}</div>
             <div class="kpi-label">自习室</div>
           </div>
-          <div class="kpi">
+          <div class="kpi kpi-ok">
             <div class="kpi-num">
               {{ availableSeats }}<span class="kpi-slash">/</span><span class="kpi-total">{{ totalSeats }}</span>
             </div>
@@ -177,25 +180,23 @@ const cardToneClass = {
             <div class="kpi-label">管理模块</div>
           </div>
           <div class="kpi">
-            <div class="kpi-num">{{ openHours.open }}<br/><span style="font-size:11px;font-weight:500">~ {{ openHours.close }}</span></div>
+            <div class="kpi-num kpi-time">
+              {{ openHours.open }}<span class="kpi-tilde">~</span>{{ openHours.close }}
+            </div>
             <div class="kpi-label">今日开放</div>
           </div>
         </div>
       </section>
 
-      <section v-if="auth.isStudent" class="card tips-card">
-        <h3>使用小贴士</h3>
-        <ul class="tips">
+      <section class="card tips-card">
+        <h3>{{ auth.isStudent ? '使用小贴士' : '管理提示' }}</h3>
+        <ul v-if="auth.isStudent" class="tips tips-list">
           <li>距开始不足 30 分钟取消预约将扣 <b>2 分</b>信用分</li>
           <li>超时未签到会自动记为违约，扣 <b>8 分</b>，并释放座位</li>
           <li>满座时段可加入 <b>候补</b>，空位释放时按序自动递补</li>
           <li>信用分低于 60，<b>3 天内</b>无法发起新预约</li>
         </ul>
-      </section>
-
-      <section v-else class="card tips-card">
-        <h3>管理提示</h3>
-        <ul class="tips">
+        <ul v-else class="tips tips-list">
           <li>定期检查自习室开放时间与座位规模是否准确</li>
           <li>维护中的座位不会开放给普通用户预约</li>
           <li>可在用户管理中启用或禁用普通用户账号</li>
@@ -212,7 +213,7 @@ const cardToneClass = {
           <span class="muted">点击卡片直接进入对应功能</span>
         </div>
         <div class="shortcut-grid">
-          <div
+          <button
             v-for="s in shortcuts"
             :key="s.to"
             class="shortcut"
@@ -220,14 +221,14 @@ const cardToneClass = {
             @click="router.push(s.to)"
           >
             <div class="shortcut-top">
-              <div class="shortcut-icon"><AppIcon :name="s.icon" :size="32" /></div>
-              <div class="chev"><AppIcon name="chevron-right" :size="20" /></div>
+              <div class="shortcut-icon"><AppIcon :name="s.icon" :size="24" /></div>
+              <div class="chev"><AppIcon name="chevron-right" :size="18" /></div>
             </div>
             <div class="shortcut-body">
               <div class="shortcut-title">{{ s.title }}</div>
               <div class="shortcut-desc">{{ s.desc }}</div>
             </div>
-          </div>
+          </button>
         </div>
       </section>
 
@@ -282,66 +283,47 @@ const cardToneClass = {
   grid-template-columns: 320px 1fr;
 }
 
-/* 欢迎卡 */
-.welcome-card {
-  background:
-    linear-gradient(145deg, #eef3f9, #f7f9fc);
+.role-pill {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 4px 9px;
+  border-radius: var(--r-full);
 }
-.hello {
-  display: flex;
-  gap: 14px;
-  align-items: center;
+.role-pill--student {
+  background: var(--primary-weak);
+  color: var(--primary-active);
 }
-.hello-avatar {
-  width: 54px;
-  height: 54px;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #8ea6c4, #5f7ea3);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 22px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 8px 18px rgba(95,126,163,.22);
-}
-.hello-role { margin-bottom: 2px; }
-.hello-name {
-  margin: 4px 0 2px;
-  font-size: 20px;
-}
-.hello-sub {
-  margin: 0;
-  color: #828c9d;
-  font-size: 13px;
+.role-pill--admin {
+  background: var(--red-weak);
+  color: var(--red-strong);
 }
 
 /* KPI 中的可用/总数格式美化 */
 .kpi-slash {
   font-size: 14px;
   margin: 0 1px;
-  color: #8c9bb0;
+  color: var(--text-4);
   font-weight: 500;
 }
 .kpi-total {
   font-size: 14px;
-  color: #7b889b;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.kpi-time {
+  font-size: 19px;
+}
+.kpi-tilde {
+  font-size: 13px;
+  color: var(--text-4);
+  margin: 0 2px;
   font-weight: 500;
 }
 
 /* 贴士 */
-.tips {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  color: #4b5567;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.tips b {
-  color: #456388;
-  font-weight: 600;
+.tips-list {
+  margin-top: 2px;
 }
 
 /* 快速入口卡片 */
@@ -350,137 +332,135 @@ const cardToneClass = {
   flex-direction: column;
 }
 
-/* PC 下快速入口：4 个占满高度的容器 */
 .shortcut-grid {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
 }
 
 .shortcut {
+  all: unset;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   height: 100%;
-  padding: 24px 20px 22px;
-  border-radius: 16px;
+  min-height: 148px;
+  padding: 18px 16px 16px;
+  border-radius: var(--r-xl);
   cursor: pointer;
-  border: 1px solid #eef1f6;
-  background: #fbfcfe;
-  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease, background-color .22s ease;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: transform var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
   box-sizing: border-box;
 }
 
 .shortcut:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 14px 30px rgba(108, 128, 160, 0.16);
-  border-color: rgba(95, 126, 163, 0.28);
-  background: #fff;
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
+  border-color: #d4dded;
+}
+
+.shortcut:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .shortcut-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .shortcut-icon {
-  width: 58px;
-  height: 58px;
-  border-radius: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-lg);
   display: grid;
   place-items: center;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(108, 128, 160, 0.06), 0 4px 12px rgba(108, 128, 160, 0.08);
   flex-shrink: 0;
-  transition: transform .2s ease;
-}
-
-.shortcut-icon .app-icon {
-  width: 32px;
-  height: 32px;
+  transition: transform var(--dur-2) var(--ease-out);
 }
 
 .shortcut:hover .shortcut-icon {
-  transform: scale(1.06);
+  transform: scale(1.05);
 }
 
 .shortcut-body {
   min-width: 0;
 }
 
-/* 大幅加大标题字号，使其更加突出显眼 */
 .shortcut-title {
-  font-size: 24px;
-  font-weight: 800;
-  color: #202836;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text-1);
   line-height: 1.3;
-  margin-bottom: 8px;
-  letter-spacing: -0.3px;
-  transition: color .2s ease;
+  margin-bottom: 5px;
+  letter-spacing: -.01em;
+  transition: color var(--dur-1) var(--ease);
 }
 
 .shortcut:hover .shortcut-title {
-  color: #3b5f88;
+  color: var(--primary-active);
 }
 
 .shortcut-desc {
-  font-size: 13px;
-  color: #828c9d;
-  line-height: 1.5;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+  line-height: 1.55;
+  min-height: calc(1.55em * 2);
 }
 
 .shortcut .chev {
-  color: #a2abb9;
+  color: var(--text-4);
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  background: rgba(0, 0, 0, 0.02);
-  transition: transform .2s ease, color .2s ease, background .2s ease;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  transition: transform var(--dur-2) var(--ease), color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
 
 .shortcut:hover .chev {
-  transform: translateX(4px);
-  color: #456388;
-  background: rgba(69, 99, 136, 0.08);
+  transform: translateX(3px);
+  color: var(--primary);
+  background: var(--primary-faint);
 }
 
-.tone-primary .shortcut-icon { background: linear-gradient(145deg, #dce8f7, #eff4fb); }
-.tone-success .shortcut-icon { background: linear-gradient(145deg, #dff1e0, #eff9f0); }
-.tone-warm    .shortcut-icon { background: linear-gradient(145deg, #f6e7d0, #fbf2e3); }
-.tone-violet  .shortcut-icon { background: linear-gradient(145deg, #e4ddf5, #f1ecfa); }
+.tone-primary .shortcut-icon { background: var(--primary-weak); color: var(--primary-active); }
+.tone-success .shortcut-icon { background: var(--green-weak); color: var(--green-strong); }
+.tone-warm    .shortcut-icon { background: var(--amber-weak); color: var(--amber-strong); }
+.tone-violet  .shortcut-icon { background: var(--violet-weak); color: var(--violet-strong); }
 
 /* 系统介绍 */
 .intro-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  gap: 12px;
 }
 .intro-cell {
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   padding: 14px 16px;
-  background: linear-gradient(150deg, #f7f9fc, #eef2f8);
-  border: 1px solid #eef1f6;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
 }
 .intro-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #456388;
-  margin-bottom: 4px;
-  letter-spacing: .3px;
+  font-size: var(--fs-body-sm);
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 5px;
+  letter-spacing: -.005em;
 }
 .intro-text {
-  font-size: 12.5px;
-  color: #5b6576;
-  line-height: 1.65;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+  line-height: 1.7;
 }
 
-/* ---------- 响应式断点：全部组件占满 100% 宽度，快速入口移至问候卡片下一行 ---------- */
+/* ---------- 响应式断点 ---------- */
 @media (max-width: 1024px) {
   .home-split {
     display: flex !important;
@@ -492,130 +472,90 @@ const cardToneClass = {
   .home-split .split-right {
     display: contents !important;
   }
-  .welcome-card { order: 1; width: 100%; }
+  .overview-card { order: 1; width: 100%; }
   .shortcuts-card { order: 2; width: 100%; }
-  .overview-card { order: 3; width: 100%; }
-  .tips-card { order: 4; width: 100%; }
-  .intro-card { order: 5; width: 100%; }
+  .tips-card { order: 3; width: 100%; }
+  .intro-card { order: 4; width: 100%; }
 
-  /* 快速入口单列全宽 */
   .shortcut-grid {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
   }
   .shortcut {
     width: 100%;
-    min-height: 92px;
-    padding: 18px 22px;
+    min-height: 84px;
+    padding: 16px 18px;
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 18px;
+    gap: 14px;
   }
   .shortcut-top {
     display: contents;
   }
   .shortcut-icon {
     order: 1;
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
+    width: 48px;
+    height: 48px;
     flex-shrink: 0;
   }
-  .shortcut-icon .app-icon {
-    width: 32px;
-    height: 32px;
+  .shortcut-desc {
+    min-height: 0;
   }
   .shortcut-body {
     order: 2;
     flex: 1;
     min-width: 0;
   }
-  .shortcut-title {
-    font-size: 22px;
-    font-weight: 800;
-    margin-bottom: 4px;
-    line-height: 1.3;
-  }
-  .shortcut-desc {
-    font-size: 13px;
-    color: #828c9d;
-  }
   .shortcut .chev {
     order: 3;
     flex-shrink: 0;
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 30px;
+    height: 30px;
   }
 
-  /* 账户概览 KPI 单列全宽行 */
-  .kpi-grid {
+  .intro-grid {
     grid-template-columns: 1fr;
     gap: 10px;
     width: 100%;
-  }
-  .kpi {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px;
-    box-sizing: border-box;
-  }
-  .kpi-label {
-    margin-top: 0;
-    font-size: 13.5px;
-    color: #788599;
-  }
-  .kpi-num {
-    font-size: 22px;
-    font-weight: 700;
-    text-align: right;
-  }
-
-  /* 系统介绍单列全宽 */
-  .intro-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    width: 100%;
-  }
-  .intro-cell {
-    width: 100%;
-    box-sizing: border-box;
   }
 }
 
 @media (max-width: 560px) {
   .shortcut {
-    min-height: 86px;
-    padding: 16px 16px;
-    gap: 14px;
+    min-height: 74px;
+    padding: 14px 14px;
+    gap: 12px;
   }
   .shortcut-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 13px;
-  }
-  .shortcut-icon .app-icon {
-    width: 26px;
-    height: 26px;
+    width: 42px;
+    height: 42px;
   }
   .shortcut-title {
-    font-size: 19px;
-    font-weight: 800;
-    margin-bottom: 3px;
+    font-size: 15px;
   }
   .shortcut-desc {
-    font-size: 12px;
+    font-size: 11.5px;
   }
-  .shortcut .chev {
-    width: 30px;
-    height: 30px;
+  /* 窄屏 KPI 退化为单列横排（数值右对齐），避免分数截断 */
+  .kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
-  .welcome-card .hello {
-    align-items: flex-start;
+  .kpi {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+  }
+  .kpi-num {
+    font-size: 20px;
+  }
+  .kpi-label {
+    margin-top: 0;
+    font-size: var(--fs-body-sm);
+    color: var(--text-3);
   }
 }
 </style>

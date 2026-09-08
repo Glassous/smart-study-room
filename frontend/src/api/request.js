@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { message } from '../components/ui/feedback'
 import router from '../router'
 
 // 统一 axios 实例: 注入令牌 / 拆包响应 / 统一错误提示
@@ -20,16 +20,16 @@ request.interceptors.response.use(
   (resp) => resp.data,
   (err) => {
     const status = err.response?.status
-    const message = err.response?.data?.message || '网络异常，请稍后重试'
+    const errMsg = err.response?.data?.message || '网络异常，请稍后重试'
     if (status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      ElMessage.error('登录已过期，请重新登录')
+      message.error('登录已过期，请重新登录')
       router.push('/login')
     } else {
-      ElMessage.error(message)
+      message.error(errMsg)
     }
-    return Promise.reject(new Error(message))
+    return Promise.reject(new Error(errMsg))
   }
 )
 

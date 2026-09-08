@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from '../components/ui/feedback'
 import { listNotifications, markRead, markAllRead } from '../api/notification'
 import { useNotificationStore } from '../stores/notification'
 import AppIcon from '../components/AppIcon.vue'
+import SButton from '../components/ui/SButton.vue'
+import SEmpty from '../components/ui/SEmpty.vue'
 
 const notifStore = useNotificationStore()
 const list = ref([])
@@ -11,12 +13,12 @@ const loading = ref(false)
 const filterType = ref('all')
 
 const typeMeta = {
-  reservation_success: { text: '预约成功', color: '#5fa655' },
-  checkin_reminder:   { text: '签到提醒', color: '#5f7ea3' },
-  violation:          { text: '违约警告', color: '#c86a6a' },
-  credit_change:      { text: '信用变动', color: '#c78941' },
-  waitlist_promoted:  { text: '候补递补', color: '#8a72c0' },
-  system:             { text: '系统',     color: '#828c9d' }
+  reservation_success: { text: '预约成功', color: 'var(--green-strong)', bg: 'var(--green-weak)' },
+  checkin_reminder:   { text: '签到提醒', color: 'var(--primary-active)', bg: 'var(--primary-weak)' },
+  violation:          { text: '违约警告', color: 'var(--red-strong)', bg: 'var(--red-weak)' },
+  credit_change:      { text: '信用变动', color: 'var(--amber-strong)', bg: 'var(--amber-weak)' },
+  waitlist_promoted:  { text: '候补递补', color: 'var(--violet-strong)', bg: 'var(--violet-weak)' },
+  system:             { text: '系统',     color: 'var(--text-2)', bg: 'var(--surface-3)' }
 }
 
 async function load() {
@@ -40,7 +42,7 @@ async function onMarkRead(n) {
 
 async function onMarkAll() {
   const resp = await markAllRead()
-  ElMessage.success(`已标记 ${resp.data.marked} 条为已读`)
+  message.success(`已标记 ${resp.data.marked} 条为已读`)
   notifStore.clear()
   load()
 }
@@ -85,37 +87,40 @@ onMounted(load)
 
 <template>
   <div class="page-view">
-    <header class="view-heading" data-page-title><h1>消息中心</h1></header>
+    <header class="view-heading" data-page-title>
+      <h1>消息中心</h1>
+      <p class="heading-sub">预约结果、违约警告与候补递补通知</p>
+    </header>
     <div class="split notif-split">
     <div class="split-left">
       <section class="card responsive-compact">
         <div class="card-title-row">
           <h3>消息总览</h3>
-          <el-badge :value="buckets.unread" :hidden="buckets.unread === 0" :max="99">
-            <el-button size="small" @click="onMarkAll">全部已读</el-button>
-          </el-badge>
+          <SButton size="sm" variant="secondary" :disabled="buckets.unread === 0" @click="onMarkAll">全部已读</SButton>
         </div>
         <div class="kpi-grid">
           <div class="kpi"><div class="kpi-num">{{ buckets.all }}</div><div class="kpi-label">消息总数</div></div>
-          <div class="kpi kpi-warn"><div class="kpi-num">{{ buckets.unread }}</div><div class="kpi-label">未读</div></div>
+          <div class="kpi" :class="buckets.unread > 0 ? 'kpi-bad' : ''"><div class="kpi-num">{{ buckets.unread }}</div><div class="kpi-label">未读</div></div>
         </div>
       </section>
 
       <section class="card responsive-compact">
         <div class="card-title-row"><h3>消息分类</h3></div>
-        <div class="nav-list">
+        <nav class="side-nav">
           <button
             v-for="n in typeNav"
             :key="n.key"
-            class="nav-btn"
+            class="side-nav-item"
             :class="{ active: filterType === n.key }"
             @click="filterType = n.key"
           >
-            <span class="nav-icon"><AppIcon :name="n.icon" :size="17" /></span>
-            <span class="nav-label">{{ n.label }}</span>
-            <span class="nav-count">{{ buckets[n.key] ?? 0 }}</span>
+            <span class="side-nav-icon"><AppIcon :name="n.icon" :size="16" /></span>
+            <span class="side-nav-label">{{ n.label }}</span>
+            <span v-if="(n.key === 'unread' ? buckets.unread : buckets[n.key] ?? 0) > 0" class="side-nav-count">
+              {{ n.key === 'unread' ? buckets.unread : buckets[n.key] ?? 0 }}
+            </span>
           </button>
-        </div>
+        </nav>
       </section>
 
       <section class="card responsive-compact">
@@ -131,34 +136,33 @@ onMounted(load)
     <div class="split-right">
       <section class="card">
         <div class="card-title-row">
-          <h3>消息列表 <span class="muted" style="font-weight:400;margin-left:8px">（共 {{ filtered.length }} 条）</span></h3>
+          <h3>消息列表 <span class="muted">共 {{ filtered.length }} 条</span></h3>
         </div>
 
         <div v-loading="loading" class="list">
-          <el-empty v-if="!filtered.length && !loading" description="暂无消息" />
-          <div
+          <SEmpty v-if="!filtered.length && !loading" icon="inbox" description="暂无消息" />
+          <button
             v-for="n in filtered"
             :key="n.id"
             class="msg-item"
             :class="{ unread: !n.is_read }"
             @click="onMarkRead(n)"
           >
-            <el-tag
-              size="small"
-              effect="dark"
-              :style="{ background: typeMeta[n.type]?.color, border: 'none' }"
+            <span
+              class="msg-type"
+              :style="{ color: typeMeta[n.type]?.color, background: typeMeta[n.type]?.bg }"
             >
               {{ typeMeta[n.type]?.text || n.type }}
-            </el-tag>
+            </span>
             <div class="msg-body">
               <div class="msg-title">
-                {{ n.title }}
-                <el-badge v-if="!n.is_read" is-dot class="dot" />
+                <span class="msg-title-text">{{ n.title }}</span>
+                <span v-if="!n.is_read" class="msg-dot" aria-label="未读" />
               </div>
               <div class="msg-content">{{ n.content }}</div>
             </div>
             <span class="msg-time">{{ fmtTime(n.created_at) }}</span>
-          </div>
+          </button>
         </div>
       </section>
     </div>
@@ -168,33 +172,11 @@ onMounted(load)
 
 <style scoped>
 .notif-split { grid-template-columns: 280px 1fr; }
-.kpi-warn .kpi-num { color: #c86a6a; }
-
-.nav-list { display: flex; flex-direction: column; gap: 6px; }
-.nav-btn {
-  all: unset; cursor: pointer;
-  display: grid;
-  grid-template-columns: 24px 1fr auto;
-  gap: 10px; align-items: center;
-  padding: 9px 12px; border-radius: 10px;
-  transition: background .15s ease;
-}
-.nav-btn:hover { background: #eef2f8; }
-.nav-btn.active {
-  background: linear-gradient(135deg, #cfdae8, #e3eaf4);
-  color: #2f4462; font-weight: 600;
-  box-shadow: inset 0 1px 0 #fff;
-}
-.nav-icon { text-align: center; }
-.nav-label { font-size: 13.5px; color: #465065; }
-.nav-count {
-  font-size: 12px; padding: 1px 8px; border-radius: 999px;
-  background: #e5e9f0; color: #6b7280;
-}
-.nav-btn.active .nav-count { background: #fff; color: #456388; }
 
 .list {
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 /* PC 宽屏：消息列表在右栏卡内纵向滚动，右栏高度可控 */
 @media (min-width: 1025px) {
@@ -205,41 +187,79 @@ onMounted(load)
   }
 }
 .msg-item {
+  all: unset;
   display: grid;
-  grid-template-columns: 88px 1fr auto;
+  grid-template-columns: 76px 1fr auto;
   gap: 14px;
   align-items: flex-start;
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   cursor: pointer;
-  transition: background .15s ease;
+  transition: background var(--dur-1) var(--ease);
   border: 1px solid transparent;
+  box-sizing: border-box;
+  width: 100%;
 }
-.msg-item:hover { background: #f6f8fb; }
+.msg-item:hover {
+  background: var(--surface-hover);
+}
+.msg-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
 .msg-item.unread {
-  background: linear-gradient(135deg, #f4f7fb, #eef3f9);
-  border-color: #e1e8f2;
+  background: var(--primary-faint);
+  border-color: #e0e8fb;
 }
 .msg-body { min-width: 0; }
-.msg-title {
-  font-weight: 600; color: #2b3240;
-  display: flex; align-items: center; gap: 6px;
-}
-.dot { margin-left: 2px; }
-.msg-content {
-  color: #4b5567; font-size: 13.5px;
-  margin-top: 4px; line-height: 1.6;
-}
-.msg-time {
-  color: #94a0b2; font-size: 12px;
+.msg-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  font-weight: 500;
   white-space: nowrap;
 }
-.tips {
-  margin: 0; padding-left: 18px;
-  display: flex; flex-direction: column; gap: 6px;
-  color: #4b5567; font-size: 13px; line-height: 1.6;
+.msg-title {
+  font-weight: 600;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.tips b { color: #456388; font-weight: 600; }
+.msg-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.msg-content {
+  color: var(--text-2);
+  font-size: var(--fs-body-sm);
+  margin-top: 4px;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.msg-time {
+  color: var(--text-4);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
 
 @media (max-width: 720px) {
   .msg-item {
@@ -247,7 +267,6 @@ onMounted(load)
     gap: 8px 10px;
     padding: 12px;
   }
-  .msg-item :deep(.el-tag) { width: fit-content; }
   .msg-time {
     grid-column: 1;
     white-space: normal;

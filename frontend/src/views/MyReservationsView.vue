@@ -1,11 +1,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { message, confirmDialog } from '../components/ui/feedback'
 import {
   listMyReservations, cancelReservation, checkinReservation,
   leaveReservation, returnReservation, checkoutReservation
 } from '../api/reservation'
 import AppIcon from '../components/AppIcon.vue'
+import SButton from '../components/ui/SButton.vue'
+import STag from '../components/ui/STag.vue'
+import SEmpty from '../components/ui/SEmpty.vue'
 
 const list = ref([])
 const loading = ref(false)
@@ -29,6 +32,14 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+const actionVariant = {
+  primary: 'primary',
+  danger: 'soft-danger',
+  warning: 'soft-warn',
+  success: 'soft-success',
+  info: 'soft'
 }
 
 function actionsOf(r) {
@@ -64,14 +75,14 @@ const actionText = {
 async function doAction(r, key) {
   if (key === 'cancel') {
     try {
-      await ElMessageBox.confirm(
+      await confirmDialog(
         '距开始不足 30 分钟的取消将扣除 2 信用分，确认取消？',
         '取消预约', { confirmButtonText: '确认取消', type: 'warning' }
       )
     } catch { return }
   }
   await apiMap[key](r.id)
-  ElMessage.success(actionText[key] + '成功')
+  message.success(actionText[key] + '成功')
   load()
 }
 
@@ -100,14 +111,17 @@ onMounted(load)
 
 <template>
   <div class="page-view">
-    <header class="view-heading" data-page-title><h1>我的预约</h1></header>
+    <header class="view-heading" data-page-title>
+      <h1>我的预约</h1>
+      <p class="heading-sub">管理签到、临时离开与签退等预约全生命周期操作</p>
+    </header>
     <!-- 我的预约：页面级双栏 = 左状态筛选 | 右列表 -->
     <div class="split mine-split">
     <div class="split-left">
       <section class="card responsive-compact">
         <div class="card-title-row">
           <h3>预约概览</h3>
-          <el-button size="small" @click="load"><AppIcon name="refresh" :size="15" />刷新</el-button>
+          <SButton size="sm" variant="secondary" @click="load"><AppIcon name="refresh" :size="14" />刷新</SButton>
         </div>
         <div class="kpi-grid kpi-lg">
           <div class="kpi"><div class="kpi-num">{{ statusBuckets.all }}</div><div class="kpi-label">累计预约</div></div>
@@ -121,19 +135,19 @@ onMounted(load)
         <div class="card-title-row">
           <h3>状态筛选</h3>
         </div>
-        <div class="status-list">
+        <nav class="side-nav">
           <button
             v-for="s in statusNav"
             :key="s.key"
-            class="status-btn"
+            class="side-nav-item"
             :class="{ active: filterStatus === s.key }"
             @click="filterStatus = s.key"
           >
-            <span class="status-icon"><AppIcon :name="s.icon" :size="17" /></span>
-            <span class="status-label">{{ s.label }}</span>
-            <span class="status-count">{{ statusBuckets[s.key] ?? 0 }}</span>
+            <span class="side-nav-icon"><AppIcon :name="s.icon" :size="16" /></span>
+            <span class="side-nav-label">{{ s.label }}</span>
+            <span class="side-nav-count">{{ statusBuckets[s.key] ?? 0 }}</span>
           </button>
-        </div>
+        </nav>
       </section>
 
       <section class="card tips-card responsive-compact">
@@ -151,53 +165,56 @@ onMounted(load)
         <div class="card-title-row">
           <h3>
             预约记录
-            <span class="muted" style="font-weight:400; margin-left:8px">（共 {{ filtered.length }} 条）</span>
+            <span class="muted">共 {{ filtered.length }} 条</span>
           </h3>
         </div>
 
-        <div class="responsive-scroll" tabindex="0" aria-label="预约记录表格，可左右滑动">
-        <el-table v-loading="loading" :data="filtered" stripe class="mine-table" max-height="560">
-          <el-table-column label="日期" width="110">
-            <template #default="{ row }">{{ row.res_date }}</template>
-          </el-table-column>
-          <el-table-column label="时段" width="130">
-            <template #default="{ row }">{{ row.start_time.slice(0, 5) }} - {{ row.end_time.slice(0, 5) }}</template>
-          </el-table-column>
-          <el-table-column label="自习室" prop="room_name" min-width="130" />
-          <el-table-column label="座位" width="80">
-            <template #default="{ row }"><b>{{ row.seat_no }}</b></template>
-          </el-table-column>
-          <el-table-column label="来源" width="96">
-            <template #default="{ row }">
-              <el-tag size="small" effect="plain">{{ sourceMeta[row.source] || row.source }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="98">
-            <template #default="{ row }">
-              <el-tag size="small" :type="statusMeta[row.status]?.type">
-                {{ statusMeta[row.status]?.text || row.status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" min-width="230">
-            <template #default="{ row }">
-              <el-button
-                v-for="a in actionsOf(row)"
-                :key="a.key"
-                size="small"
-                :type="a.type"
-                :plain="a.plain"
-                @click="doAction(row, a.key)"
-              >
-                {{ a.label }}
-              </el-button>
-              <span v-if="!actionsOf(row).length" class="dim">—</span>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-wrap">
+          <div class="table-scroll" v-loading="loading" tabindex="0" aria-label="预约记录表格，可左右滑动">
+            <table class="table mine-table">
+              <thead>
+                <tr>
+                  <th style="width:106px">日期</th>
+                  <th style="width:128px">时段</th>
+                  <th style="min-width:118px">自习室</th>
+                  <th style="width:64px">座位</th>
+                  <th style="width:90px">来源</th>
+                  <th style="width:96px">状态</th>
+                  <th style="width:178px">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in filtered" :key="row.id">
+                  <td class="num">{{ row.res_date }}</td>
+                  <td class="num">{{ row.start_time.slice(0, 5) }} - {{ row.end_time.slice(0, 5) }}</td>
+                  <td>{{ row.room_name }}</td>
+                  <td class="cell-strong">{{ row.seat_no }}</td>
+                  <td><STag>{{ sourceMeta[row.source] || row.source }}</STag></td>
+                  <td>
+                    <STag :type="statusMeta[row.status]?.type" dot :line="row.status === 'cancelled'">
+                      {{ statusMeta[row.status]?.text || row.status }}
+                    </STag>
+                  </td>
+                  <td>
+                    <span class="row-actions">
+                      <SButton
+                        v-for="a in actionsOf(row)"
+                        :key="a.key"
+                        size="sm"
+                        :variant="actionVariant[a.type]"
+                        @click="doAction(row, a.key)"
+                      >
+                        {{ a.label }}
+                      </SButton>
+                      <span v-if="!actionsOf(row).length" class="cell-dim">—</span>
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <SEmpty v-if="!filtered.length && !loading" description="当前筛选条件下暂无预约记录" />
+          </div>
         </div>
-
-        <el-empty v-if="!filtered.length && !loading" description="当前筛选条件下暂无预约记录" />
       </section>
     </div>
     </div>
@@ -208,59 +225,15 @@ onMounted(load)
 .mine-split { grid-template-columns: 300px 1fr; }
 
 .kpi-lg .kpi-num { font-size: 24px; }
-.kpi-warn .kpi-num { color: #d49a3a; }
-.kpi-ok   .kpi-num { color: #5fa655; }
-.kpi-bad  .kpi-num { color: #c86a6a; }
-
-.status-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.mine-table { min-width: 776px; }
+.mine-table .row-actions {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
-.status-btn {
-  all: unset;
-  cursor: pointer;
-  display: grid;
-  grid-template-columns: 24px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 9px 12px;
-  border-radius: 10px;
-  transition: background .15s ease;
+.mine-table td:nth-child(3) {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.status-btn:hover { background: #eef2f8; }
-.status-btn.active {
-  background: linear-gradient(135deg, #cfdae8, #e3eaf4);
-  color: #2f4462;
-  font-weight: 600;
-  box-shadow: inset 0 1px 0 #fff;
-}
-.status-icon { font-size: 15px; text-align: center; }
-.status-label { font-size: 13.5px; color: #465065; }
-.status-btn.active .status-label { color: #2f4462; }
-.status-count {
-  font-size: 12px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: #e5e9f0;
-  color: #6b7280;
-}
-.status-btn.active .status-count {
-  background: #fff;
-  color: #456388;
-}
-
-.tips {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  color: #4b5567;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.tips b { color: #456388; font-weight: 600; }
-.dim { color: #c0c4cc; }
-.mine-table { min-width: 974px; }
 </style>

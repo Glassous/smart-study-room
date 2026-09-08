@@ -1,14 +1,15 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { message } from '../components/ui/feedback'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notification'
 import AppIcon from '../components/AppIcon.vue'
 import MobileTopbar from '../components/MobileTopbar.vue'
 import AIAssistant from '../components/AIAssistant.vue'
+import SBadge from '../components/ui/SBadge.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -23,6 +24,48 @@ const mobilePageTitle = ref('')
 const contentRef = ref(null)
 const isDesktopCollapsed = computed(() => !isNarrowScreen.value && isSidebarCollapsed.value)
 let titleMedia = null
+
+// 用户菜单弹出层（Teleport 到 body，避免被侧栏 overflow 裁剪）
+const userMenuOpen = ref(false)
+const userAreaRef = ref(null)
+const userMenuStyle = ref({})
+
+function updateUserMenuPosition() {
+  const el = userAreaRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const collapsed = isDesktopCollapsed.value
+  if (collapsed) {
+    userMenuStyle.value = {
+      position: 'fixed',
+      left: `${Math.round(rect.right + 10)}px`,
+      bottom: `${Math.round(window.innerHeight - rect.bottom)}px`,
+      width: '150px'
+    }
+  } else {
+    userMenuStyle.value = {
+      position: 'fixed',
+      left: `${Math.round(rect.left)}px`,
+      bottom: `${Math.round(window.innerHeight - rect.top + 8)}px`,
+      width: `${Math.round(rect.width)}px`
+    }
+  }
+}
+
+function toggleUserMenu() {
+  userMenuOpen.value = !userMenuOpen.value
+  if (userMenuOpen.value) updateUserMenuPosition()
+}
+
+function onDocPointerDown(e) {
+  if (userMenuOpen.value && !userAreaRef.value?.contains(e.target) && !e.target.closest('.user-menu')) {
+    userMenuOpen.value = false
+  }
+}
+
+function onUiReposition() {
+  if (userMenuOpen.value) updateUserMenuPosition()
+}
 
 // 未读消息角标(通过 Pinia Store 集中管理与 60s 轮询)
 const unread = computed(() => notifStore.unread)
@@ -52,17 +95,19 @@ const menus = computed(() => {
 })
 
 async function handleSelect(index) {
+  userMenuOpen.value = false
   if (route.path !== index) await router.push(index)
   if (isNarrowScreen.value) closeSidebar()
 }
 
 function onLogout() {
   auth.logout()
-  ElMessage.success('已退出登录')
+  message.success('已退出登录')
   router.push('/login')
 }
 
 function handleAccountCommand(command) {
+  userMenuOpen.value = false
   if (command === 'profile') {
     router.push('/profile')
     if (isNarrowScreen.value) closeSidebar()
@@ -111,7 +156,7 @@ function setupMobileTitleAnimation() {
   const scroller = contentRef.value
   const heading = scroller?.querySelector('[data-page-title]')
   if (!scroller || !heading) return
-  mobilePageTitle.value = heading.textContent?.trim() || route.meta?.title || ''
+  mobilePageTitle.value = heading.querySelector('h1')?.textContent?.trim() || heading.textContent?.trim() || route.meta?.title || ''
 
   titleMedia = gsap.matchMedia()
   titleMedia.add(
@@ -170,6 +215,7 @@ function setupMobileTitleAnimation() {
 watch(() => route.fullPath, async () => {
   cleanupMobileTitleAnimation()
   mobilePageTitle.value = ''
+  userMenuOpen.value = false
   if (contentRef.value) contentRef.value.scrollTop = 0
   await nextTick()
   setupMobileTitleAnimation()
@@ -178,6 +224,9 @@ watch(() => route.fullPath, async () => {
 onMounted(() => {
   narrowMediaQuery.addEventListener('change', onNarrowChange)
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('scroll', onUiReposition, true)
+  window.addEventListener('resize', onUiReposition)
+  document.addEventListener('pointerdown', onDocPointerDown)
   if (auth.isStudent) {
     refreshUnread()
     timer = setInterval(refreshUnread, 60000)
@@ -188,6 +237,9 @@ onUnmounted(() => {
   cleanupMobileTitleAnimation()
   narrowMediaQuery.removeEventListener('change', onNarrowChange)
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('scroll', onUiReposition, true)
+  window.removeEventListener('resize', onUiReposition)
+  document.removeEventListener('pointerdown', onDocPointerDown)
   if (timer) clearInterval(timer)
 })
 </script>
@@ -225,8 +277,11 @@ onUnmounted(() => {
 
     <!-- ============== 左栏（导航 / 品牌 / 用户） ============== -->
     <aside class="sidebar" :class="{ collapsed: isSidebarCollapsed }">
-      <!-- 品牌 -->
+      <!-- 品牌（折叠/展开按钮固定在品牌行右侧，位置不随折叠状态改变） -->
       <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <AppIcon name="book" :size="18" />
+        </div>
         <div v-show="!isDesktopCollapsed" class="brand-copy">
           <div class="brand-name">智能自习室</div>
           <div class="brand-sub">Smart Study Room</div>
@@ -239,12 +294,12 @@ onUnmounted(() => {
           :aria-expanded="!isSidebarCollapsed"
           @click="toggleSidebar"
         >
-          <AppIcon :name="isDesktopCollapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="20" />
+          <AppIcon :name="isDesktopCollapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="18" />
         </button>
       </div>
 
       <!-- 菜单 -->
-      <nav class="menu">
+      <nav class="menu" aria-label="主导航">
         <button
           v-for="m in menus"
           :key="m.index"
@@ -254,9 +309,9 @@ onUnmounted(() => {
           :aria-label="m.title"
           @click="handleSelect(m.index)"
         >
-          <span class="menu-icon"><AppIcon :name="m.icon" :size="20" /></span>
+          <span class="menu-icon"><AppIcon :name="m.icon" :size="19" /></span>
           <span class="menu-text">{{ m.title }}</span>
-          <el-badge
+          <SBadge
             v-if="m.index === '/notifications' && unread > 0"
             :value="unread"
             :max="99"
@@ -268,37 +323,31 @@ onUnmounted(() => {
       <div class="sidebar-spacer" />
 
       <!-- 底部：账户入口 -->
-      <div class="sidebar-footer">
-        <el-dropdown
-          v-if="auth.isLoggedIn"
-          class="user-dropdown"
-          @command="handleAccountCommand"
-          trigger="click"
+      <div v-if="auth.isLoggedIn" ref="userAreaRef" class="sidebar-footer">
+        <button
+          class="user-card"
+          :class="{ open: userMenuOpen }"
+          :title="isDesktopCollapsed ? (auth.user?.real_name || auth.user?.username) : undefined"
+          :aria-expanded="userMenuOpen"
+          @click="toggleUserMenu"
         >
-          <div class="user-card" :title="isDesktopCollapsed ? (auth.user?.real_name || auth.user?.username) : undefined">
-            <div class="avatar-slot">
-              <div class="avatar">
-                {{ (auth.user?.real_name || auth.user?.username || '?').slice(0, 1) }}
-              </div>
-            </div>
-            <div v-show="!isDesktopCollapsed" class="user-meta">
-              <div class="user-name">
-                {{ auth.user?.real_name || auth.user?.username }}
-              </div>
-              <el-tag class="role-tag" size="small" effect="plain" :type="auth.isAdmin ? 'danger' : 'primary'">
-                {{ auth.isAdmin ? '管理员' : '学生' }}
-              </el-tag>
+          <div class="avatar-slot">
+            <div class="avatar">
+              {{ (auth.user?.real_name || auth.user?.username || '?').slice(0, 1) }}
             </div>
           </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="profile">
-                个人中心
-              </el-dropdown-item>
-              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+          <div v-show="!isDesktopCollapsed" class="user-meta">
+            <div class="user-name">
+              {{ auth.user?.real_name || auth.user?.username }}
+            </div>
+            <span class="role-pill" :class="auth.isAdmin ? 'role-pill--admin' : 'role-pill--student'">
+              {{ auth.isAdmin ? '管理员' : '学生' }}
+            </span>
+          </div>
+          <span v-show="!isDesktopCollapsed" class="user-chev" :class="{ open: userMenuOpen }" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4" /></svg>
+          </span>
+        </button>
       </div>
     </aside>
 
@@ -310,6 +359,22 @@ onUnmounted(() => {
       </main>
     </section>
     <AIAssistant v-if="auth.isLoggedIn && auth.isStudent" />
+
+    <!-- 用户弹出菜单（Teleport 避免侧栏 overflow 裁剪） -->
+    <Teleport to="body">
+      <Transition name="user-menu">
+        <div v-if="userMenuOpen && auth.isLoggedIn" class="user-menu" :style="userMenuStyle" role="menu">
+          <button class="user-menu-item" role="menuitem" @click="handleAccountCommand('profile')">
+            <AppIcon name="profile" :size="16" />个人中心
+          </button>
+          <div class="user-menu-divider" />
+          <button class="user-menu-item user-menu-item--danger" role="menuitem" @click="handleAccountCommand('logout')">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H15M10 8l-4 4 4 4M6 12h10" transform="rotate(180 12 12)" /></svg>
+            退出登录
+          </button>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -318,18 +383,18 @@ onUnmounted(() => {
 .shell {
   height: 100%;
   display: grid;
-  grid-template-columns: 272px 1fr;
-  background: var(--app-canvas-background);
-  transition: grid-template-columns .22s ease;
+  grid-template-columns: 256px 1fr;
+  background: var(--canvas);
+  transition: grid-template-columns var(--dur-3) var(--ease);
 }
 .shell:not(.narrow-screen).sidebar-collapsed {
-  grid-template-columns: 68px 1fr;
+  grid-template-columns: 72px 1fr;
 }
 .sidebar-backdrop {
   position: fixed;
   z-index: 40;
   inset: 0;
-  background: rgba(24, 34, 49, .34);
+  background: rgba(23, 32, 54, .38);
   backdrop-filter: blur(1px);
 }
 
@@ -337,140 +402,181 @@ onUnmounted(() => {
 .sidebar {
   display: flex;
   flex-direction: column;
-  background:
-    linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-  border-right: 1px solid #e5e9f0;
-  padding: 22px 12px 14px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 18px 12px 12px;
   min-height: 0;
   overflow: hidden;
 }
+
+/* 折叠态：收窄内边距以容纳 logo + 固定位置的折叠按钮 */
+.shell:not(.narrow-screen) .sidebar.collapsed {
+  padding: 18px 4px 12px;
+}
+
 .brand {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 4px 10px 10px;
-  min-height: 51px;
+  gap: 8px;
+  padding: 2px 6px 14px 8px;
+  min-height: 50px;
   white-space: nowrap;
 }
 .shell:not(.narrow-screen) .sidebar.collapsed .brand {
-  justify-content: center;
-  padding: 4px 0 10px;
+  padding: 2px 4px 14px;
+  gap: 0;
+}
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: var(--r-lg);
+  background: var(--primary);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 2px 6px rgba(59, 102, 218, .3);
 }
 .brand-copy {
   min-width: 0;
+  flex: 1;
 }
 .brand-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: #334155;
-  letter-spacing: 0.2px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text-1);
+  letter-spacing: -.01em;
 }
 .brand-sub {
-  font-size: 11px;
-  color: #94a0b2;
-  margin-top: 2px;
-  letter-spacing: 0.4px;
+  font-size: 10px;
+  color: var(--text-4);
+  margin-top: 1px;
+  letter-spacing: .07em;
   text-transform: uppercase;
 }
 .sidebar-toggle {
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
-  color: #657892;
-  width: 32px;
-  height: 32px;
+  color: var(--text-4);
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   display: grid;
   place-items: center;
-  flex: 0 0 auto;
-  cursor: pointer;
-  transition: color .16s ease, background .16s ease, border-color .16s ease;
+  flex: 0 0 30px;
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
 .sidebar-toggle:hover {
-  color: #3f5878;
-  background: #eef2f8;
-  border-color: #e0e6ef;
+  color: var(--text-2);
+  background: var(--surface-3);
 }
 .sidebar-toggle:focus-visible {
-  outline: 3px solid rgba(95, 126, 163, .22);
-  outline-offset: 2px;
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 
 /* 菜单 */
 .menu {
-  margin-top: 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   overflow-x: hidden;
   overflow-y: auto;
   padding: 4px 0;
+  scrollbar-width: none;
+}
+.menu::-webkit-scrollbar {
+  display: none;
 }
 .menu-item {
   all: unset;
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 10px 0;
-  border-radius: 10px;
+  padding: 0;
+  border-radius: var(--r-md);
   cursor: pointer;
-  color: #5c6778;
-  font-size: 14px;
-  transition: background .18s ease, color .18s ease, transform .18s ease;
+  color: var(--text-2);
+  font-size: var(--fs-body-sm);
+  font-weight: 500;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
   position: relative;
   width: 100%;
-  min-height: 42px;
+  min-height: 38px;
   box-sizing: border-box;
 }
 .menu-item:hover {
-  background: #eef2f8;
-  color: #374151;
+  background: var(--surface-hover);
+  color: var(--text-1);
 }
 .menu-item.active {
-  background: linear-gradient(135deg, #cfdae8 0%, #e3eaf4 100%);
-  color: #2f4462;
+  background: var(--primary-weak);
+  color: var(--primary-active);
   font-weight: 600;
-  box-shadow: inset 0 1px 0 #ffffff, 0 1px 2px rgba(108,128,160,.08);
+}
+.menu-item.active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--primary);
+}
+.shell:not(.narrow-screen) .sidebar.collapsed .menu-item.active::before {
+  left: -4px;
 }
 .menu-icon {
-  width: 44px;
-  height: 22px;
+  width: 42px;
+  height: 20px;
   display: grid;
   place-items: center;
-  flex: 0 0 44px;
+  flex: 0 0 42px;
+  color: var(--text-4);
+  transition: color var(--dur-1) var(--ease);
+}
+.menu-item:hover .menu-icon {
+  color: var(--text-2);
+}
+.menu-item.active .menu-icon {
+  color: var(--primary);
 }
 .menu-text {
   flex: 1;
   min-width: 0;
-  height: 22px;
+  height: 20px;
   display: flex;
   align-items: center;
-  line-height: 22px;
+  line-height: 20px;
   white-space: nowrap;
   overflow: hidden;
-  opacity: 1;
-  padding-left: 0;
-  transition: opacity .14s ease;
 }
 .menu-badge {
-  margin-right: 2px;
+  margin-right: 8px;
 }
 .shell:not(.narrow-screen) .sidebar.collapsed .menu-item {
-  padding: 10px 0;
+  justify-content: center;
+}
+.shell:not(.narrow-screen) .sidebar.collapsed .menu-icon {
+  flex: 0 0 auto;
+  width: auto;
 }
 .shell:not(.narrow-screen) .sidebar.collapsed .menu-text {
   display: none;
-  opacity: 0;
 }
+/* 折叠态徽标锚定在图标右上角，避免孤悬 */
 .shell:not(.narrow-screen) .sidebar.collapsed .menu-badge {
   position: absolute;
-  top: 3px;
-  right: 1px;
+  top: 1px;
+  left: calc(50% + 8px);
+  right: auto;
   margin: 0;
-  transform: scale(.82);
-  transform-origin: top right;
+  transform: scale(.86);
+  transform-origin: top left;
 }
 
 .sidebar-spacer {
@@ -481,35 +587,29 @@ onUnmounted(() => {
 /* 底部用户卡 */
 .sidebar-footer {
   padding-top: 10px;
-  display: flex;
-  flex-direction: column;
-}
-.user-dropdown {
-  width: 100%;
-}
-.user-dropdown :deep(.el-tooltip__trigger) {
-  display: flex;
-  width: 100%;
 }
 
 .user-card {
+  all: unset;
   display: flex;
   align-items: center;
   gap: 0;
-  height: 64px;
-  padding: 9px 0;
-  border-radius: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 0;
+  border-radius: var(--r-lg);
   background: transparent;
-  border: 1px solid transparent;
   cursor: pointer;
-  transition: background .16s ease;
-  outline: none;
+  box-sizing: border-box;
+  transition: background var(--dur-1) var(--ease);
 }
-.user-card:hover {
-  background: #f1f4f8;
+.user-card:hover,
+.user-card.open {
+  background: var(--surface-hover);
 }
 .user-card:focus-visible {
-  box-shadow: 0 0 0 3px rgba(95, 126, 163, .2);
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 .avatar-slot {
   width: 44px;
@@ -518,16 +618,19 @@ onUnmounted(() => {
   place-items: center;
 }
 .avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #8ea6c4, #6581a5);
-  color: #fff;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+  background: var(--primary-weak);
+  color: var(--primary-active);
   display: grid;
   place-items: center;
   font-weight: 700;
   font-size: 14px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.2);
+}
+.shell:not(.narrow-screen) .sidebar.collapsed .avatar-slot {
+  width: 100%;
+  flex: 0 0 auto;
 }
 .user-meta {
   flex: 1;
@@ -535,22 +638,95 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  padding-left: 6px;
-}
-.role-tag {
-  width: fit-content;
-  max-width: 100%;
-  flex: 0 0 auto;
+  gap: 3px;
+  padding-left: 2px;
 }
 .user-name {
   font-size: 13px;
   font-weight: 600;
-  color: #2f3a4d;
+  color: var(--text-1);
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.role-pill {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+}
+.role-pill--student {
+  background: var(--primary-weak);
+  color: var(--primary-active);
+}
+.role-pill--admin {
+  background: var(--red-weak);
+  color: var(--red-strong);
+}
+.user-chev {
+  color: var(--text-4);
+  flex: 0 0 auto;
+  margin-right: 10px;
+  display: grid;
+  place-items: center;
+  transition: transform var(--dur-2) var(--ease);
+}
+.user-chev.open {
+  transform: rotate(180deg);
+}
+
+/* 用户弹出菜单（Teleport 到 body，fixed 定位由 JS 计算） */
+.user-menu {
+  z-index: calc(var(--z-sidebar) + 10);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  padding: 5px;
+  box-sizing: border-box;
+}
+.user-menu-item {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-body-sm);
+  color: var(--text-2);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.user-menu-item:hover {
+  background: var(--surface-hover);
+  color: var(--text-1);
+}
+.user-menu-item--danger {
+  color: var(--red-strong);
+}
+.user-menu-item--danger:hover {
+  background: var(--red-weak);
+  color: var(--red-strong);
+}
+.user-menu-divider {
+  height: 1px;
+  background: var(--hairline);
+  margin: 4px 6px;
+}
+.user-menu-enter-active,
+.user-menu-leave-active {
+  transition: opacity var(--dur-1) var(--ease), transform var(--dur-2) var(--ease-out);
+}
+.user-menu-enter-from,
+.user-menu-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
 /* ============== 右栏 Content ============== */
 .content {
   min-width: 0;
@@ -584,15 +760,15 @@ onUnmounted(() => {
     transform: translateX(0);
     visibility: visible;
     pointer-events: auto;
-    box-shadow: 12px 0 30px rgba(36, 48, 68, .16);
-    transition: transform .22s ease, visibility 0s linear 0s;
+    box-shadow: 12px 0 32px rgba(23, 32, 54, .18);
+    transition: transform var(--dur-3) var(--ease), visibility 0s linear 0s;
   }
   .sidebar.collapsed {
     transform: translateX(-100%);
     visibility: hidden;
     pointer-events: none;
     box-shadow: none;
-    transition: transform .22s ease, visibility 0s linear .22s;
+    transition: transform var(--dur-3) var(--ease), visibility 0s linear .24s;
   }
 
   .content {
@@ -611,6 +787,9 @@ onUnmounted(() => {
     min-height: 0;
     overflow: visible;
   }
+  /* 触控目标：移动端菜单项加高 */
+  .menu-item {
+    min-height: 46px;
+  }
 }
-
 </style>
