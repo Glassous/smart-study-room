@@ -1,6 +1,9 @@
 import axios from 'axios'
 import { message } from '../components/ui/feedback'
 import router from '../router'
+import { useAuthStore } from '../stores/auth'
+
+let expiredTokenHandled = ''
 
 // 统一 axios 实例: 注入令牌 / 拆包响应 / 统一错误提示
 const request = axios.create({
@@ -21,12 +24,15 @@ request.interceptors.response.use(
   (err) => {
     const status = err.response?.status
     const errMsg = err.response?.data?.message || '网络异常，请稍后重试'
-    if (status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      message.error('登录已过期，请重新登录')
-      router.push('/login')
-    } else {
+    if (status === 401 && !err.config?.skipAuthHandling) {
+      const expiredToken = localStorage.getItem('token') || ''
+      if (expiredToken && expiredToken !== expiredTokenHandled) {
+        expiredTokenHandled = expiredToken
+        useAuthStore().logout()
+        message.error('登录已过期，请重新登录')
+        router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } })
+      }
+    } else if (!err.config?.silent) {
       message.error(errMsg)
     }
     return Promise.reject(new Error(errMsg))
