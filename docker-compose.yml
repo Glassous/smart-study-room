@@ -72,9 +72,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: studyroom-backend
-    # AI 凭据只从后端专用的忽略文件读取，不写入 compose 配置或镜像。
-    env_file:
-      - ./backend/.env
     environment:
       STUDYROOM_PORT: "8080"
       STUDYROOM_DB_URL: postgres://${POSTGRES_USER:-studyroom}:${POSTGRES_PASSWORD:-studyroom}@db:5432/${POSTGRES_DB:-studyroom}?sslmode=disable
@@ -82,6 +79,13 @@ services:
       STUDYROOM_REDIS_PASSWORD: ${REDIS_PASSWORD:-studyroom_redis_pass}
       STUDYROOM_REDIS_DB: "0"
       STUDYROOM_JWT_SECRET: ${STUDYROOM_JWT_SECRET:-studyroom-dev-secret}
+      # Compose 自动读取根目录 .env；AI 未配置时后端会优雅降级，不影响其他功能。
+      STUDYROOM_AI_BASE_URL: ${STUDYROOM_AI_BASE_URL:-https://api.openai.com/v1}
+      STUDYROOM_AI_API_KEY: ${STUDYROOM_AI_API_KEY:-}
+      STUDYROOM_AI_MODEL: ${STUDYROOM_AI_MODEL:-gpt-4o-mini}
+      STUDYROOM_AI_CONNECT_TIMEOUT_SECONDS: ${STUDYROOM_AI_CONNECT_TIMEOUT_SECONDS:-10}
+      STUDYROOM_AI_RESPONSE_TIMEOUT_SECONDS: ${STUDYROOM_AI_RESPONSE_TIMEOUT_SECONDS:-60}
+      STUDYROOM_AI_CONTEXT_MESSAGES: ${STUDYROOM_AI_CONTEXT_MESSAGES:-20}
     ports:
       # 与前端 Vite 本地代理 http://127.0.0.1:8080 衔接；
       # 若宿主 8080 被其它服务占用，可设 STUDYROOM_HOST_PORT 覆盖(如 8081)

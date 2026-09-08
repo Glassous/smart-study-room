@@ -6,6 +6,7 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notification'
+import { logout as logoutApi } from '../api/auth'
 import AppIcon from '../components/AppIcon.vue'
 import MobileTopbar from '../components/MobileTopbar.vue'
 import AIAssistant from '../components/AIAssistant.vue'
@@ -57,6 +58,8 @@ async function handleSelect(index) {
 }
 
 function onLogout() {
+  const token = auth.token
+  if (token) void logoutApi(token).catch(() => {})
   auth.logout()
   ElMessage.success('已退出登录')
   router.push('/login')
