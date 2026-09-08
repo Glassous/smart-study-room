@@ -136,6 +136,21 @@ defineProps({
       <circle cx="12" cy="12" r="8.5" fill="#dfe9f6" stroke="currentColor" stroke-width="1.7" />
       <path d="M12 10.5v5M12 7.4v.1" stroke="currentColor" stroke-width="2" />
     </g>
+    <g v-else-if="name === 'sun'">
+      <circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.8" />
+      <path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" stroke="currentColor" stroke-width="1.8" />
+    </g>
+    <g v-else-if="name === 'moon'">
+      <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.3 5.3 0 0 1-4.4 2.26 5.4 5.4 0 0 1-5.4-5.4c0-1.81.9-3.41 2.26-4.4A9.1 9.1 0 0 0 12 3Z" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.8" />
+    </g>
+    <g v-else-if="name === 'system'">
+      <rect x="3" y="4" width="18" height="12" rx="2" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.8" />
+      <path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="1.8" />
+    </g>
+    <g v-else-if="name === 'logout'">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="1.8" />
+      <path d="m16 17 5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" />
+    </g>
   </svg>
 </template>
 

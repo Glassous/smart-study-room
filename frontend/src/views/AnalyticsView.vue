@@ -1,10 +1,13 @@
 <script setup>
-import { ref, onMounted, nextTick, watch, onUnmounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { getRooms } from '../api/room'
 import { getHeatmap, getOverview } from '../api/stats'
+import { useThemeStore } from '../stores/theme'
 import SSelect from '../components/ui/SSelect.vue'
 import SDatePicker from '../components/ui/SDatePicker.vue'
+
+const themeStore = useThemeStore()
 
 const rooms = ref([])
 const roomId = ref(null)
@@ -19,22 +22,29 @@ const overview = ref(null)
 
 let heatChart, trendChart, peakChart, topChart
 
-// 图表主题（与设计令牌对齐的低饱和系列色）
-const CHART = {
-  axisLine: '#d4dbe6',
-  splitLine: '#eef1f6',
-  label: '#75819a',
-  title: '#46536a',
-  primary: '#3b66da',
-  primarySoft: 'rgba(59, 102, 218, .14)',
-  bar: '#5b83d6'
-}
+// 图表主题（与深浅色模式联动）
+const CHART = computed(() => {
+  const isDark = themeStore.isDark
+  return {
+    axisLine: isDark ? '#283547' : '#d4dbe6',
+    splitLine: isDark ? '#1c2635' : '#eef1f6',
+    label: isDark ? '#8393a7' : '#75819a',
+    title: isDark ? '#f1f5fa' : '#46536a',
+    tooltipBg: isDark ? '#151b24' : '#1c2534',
+    primary: isDark ? '#4f7cf6' : '#3b66da',
+    primarySoft: isDark ? 'rgba(79, 124, 246, .24)' : 'rgba(59, 102, 218, .14)',
+    splitArea: isDark ? ['#151b24', '#1b232f'] : ['#ffffff', '#f8fafc'],
+    heatRange: isDark ? ['#1b232f', '#2e5199', '#4f7cf6'] : ['#f4f6f9', '#93b1ea', '#3b66da'],
+    heatBorder: isDark ? '#151b24' : '#ffffff'
+  }
+})
 
 async function loadHeatmap() {
   if (!roomId.value) return
   const resp = await getHeatmap(roomId.value, date.value)
   const d = resp.data
   if (!heatChart) heatChart = echarts.init(heatEl.value)
+  const c = CHART.value
 
   const data = []
   d.seats.forEach((s, i) => {
@@ -43,27 +53,28 @@ async function loadHeatmap() {
   heatChart.setOption({
     tooltip: {
       position: 'top',
-      backgroundColor: '#1c2534',
-      borderWidth: 0,
+      backgroundColor: c.tooltipBg,
+      borderColor: c.axisLine,
+      borderWidth: 1,
       textStyle: { color: '#fff', fontSize: 12 },
       formatter: (p) => `${d.seats[p.value[1]].seat_no} ${d.hours[p.value[0]]}<br/>占用：${p.value[2] ? '是' : '否'}`
     },
     grid: { top: 30, left: 70, right: 20, bottom: 60 },
-    xAxis: { type: 'category', data: d.hours, splitArea: { show: true, areaStyle: { color: ['#fff', '#f8fafc'] } }, axisLabel: { fontSize: 10, color: CHART.label }, axisLine: { lineStyle: { color: CHART.axisLine } } },
+    xAxis: { type: 'category', data: d.hours, splitArea: { show: true, areaStyle: { color: c.splitArea } }, axisLabel: { fontSize: 10, color: c.label }, axisLine: { lineStyle: { color: c.axisLine } } },
     yAxis: {
       type: 'category', data: d.seats.map((s) => s.seat_no),
-      splitArea: { show: true, areaStyle: { color: ['#fff', '#f8fafc'] } }, axisLabel: { fontSize: 9, color: CHART.label }, axisLine: { lineStyle: { color: CHART.axisLine } }
+      splitArea: { show: true, areaStyle: { color: c.splitArea } }, axisLabel: { fontSize: 9, color: c.label }, axisLine: { lineStyle: { color: c.axisLine } }
     },
     visualMap: {
       min: 0, max: 1, calculable: false,
       orient: 'horizontal', left: 'center', bottom: 0,
-      inRange: { color: ['#f4f6f9', '#93b1ea', '#3b66da'] },
-      text: ['占用', '空闲'], textStyle: { fontSize: 11, color: CHART.label }
+      inRange: { color: c.heatRange },
+      text: ['占用', '空闲'], textStyle: { fontSize: 11, color: c.label }
     },
     series: [{
       type: 'heatmap', data,
       label: { show: false },
-      itemStyle: { borderColor: '#fff', borderWidth: 1, borderRadius: 2 }
+      itemStyle: { borderColor: c.heatBorder, borderWidth: 1, borderRadius: 2 }
     }]
   })
 }
@@ -73,44 +84,46 @@ async function loadOverview() {
   overview.value = resp.data
   const d = resp.data
   await nextTick()
+  const c = CHART.value
 
   if (!trendChart) trendChart = echarts.init(trendEl.value)
   trendChart.setOption({
-    title: { text: '近 14 天使用率趋势', left: 'center', textStyle: { fontSize: 13, color: CHART.title, fontWeight: 600 } },
+    title: { text: '近 14 天使用率趋势', left: 'center', textStyle: { fontSize: 13, color: c.title, fontWeight: 600 } },
     grid: { top: 40, left: 50, right: 20, bottom: 30 },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#1c2534',
-      borderWidth: 0,
+      backgroundColor: c.tooltipBg,
+      borderColor: c.axisLine,
+      borderWidth: 1,
       textStyle: { color: '#fff', fontSize: 12 },
       formatter: (ps) => {
         const p = ps[0]
         return `${p.name}<br/>使用率 ${(p.value * 100).toFixed(1)}%`
       }
     },
-    xAxis: { type: 'category', data: d.trend_14.map((t) => t.date.slice(5)), axisLine: { lineStyle: { color: CHART.axisLine } }, axisLabel: { color: CHART.label } },
-    yAxis: { type: 'value', axisLabel: { formatter: '{value}%', color: CHART.label }, splitLine: { lineStyle: { color: CHART.splitLine } } },
+    xAxis: { type: 'category', data: d.trend_14.map((t) => t.date.slice(5)), axisLine: { lineStyle: { color: c.axisLine } }, axisLabel: { color: c.label } },
+    yAxis: { type: 'value', axisLabel: { formatter: '{value}%', color: c.label }, splitLine: { lineStyle: { color: c.splitLine } } },
     series: [{
       type: 'line', smooth: true, data: d.trend_14.map((t) => (t.utilization * 100).toFixed(1) * 1),
-      areaStyle: { color: CHART.primarySoft },
-      lineStyle: { color: CHART.primary, width: 2 },
-      itemStyle: { color: CHART.primary, borderColor: '#fff', borderWidth: 1 },
+      areaStyle: { color: c.primarySoft },
+      lineStyle: { color: c.primary, width: 2 },
+      itemStyle: { color: c.primary, borderColor: c.heatBorder, borderWidth: 1 },
       symbol: 'circle', symbolSize: 6
     }]
   })
 
   if (!peakChart) peakChart = echarts.init(peakEl.value)
   peakChart.setOption({
-    title: { text: '高峰时段分布（近 14 天）', left: 'center', textStyle: { fontSize: 13, color: CHART.title, fontWeight: 600 } },
+    title: { text: '高峰时段分布（近 14 天）', left: 'center', textStyle: { fontSize: 13, color: c.title, fontWeight: 600 } },
     grid: { top: 40, left: 50, right: 20, bottom: 30 },
-    tooltip: { trigger: 'axis', backgroundColor: '#1c2534', borderWidth: 0, textStyle: { color: '#fff', fontSize: 12 } },
-    xAxis: { type: 'category', data: d.peak.map((p) => p.hour), axisLine: { lineStyle: { color: CHART.axisLine } }, axisLabel: { color: CHART.label } },
-    yAxis: { type: 'value', name: '预约数', nameTextStyle: { color: CHART.label }, splitLine: { lineStyle: { color: CHART.splitLine } }, axisLabel: { color: CHART.label } },
+    tooltip: { trigger: 'axis', backgroundColor: c.tooltipBg, borderColor: c.axisLine, borderWidth: 1, textStyle: { color: '#fff', fontSize: 12 } },
+    xAxis: { type: 'category', data: d.peak.map((p) => p.hour), axisLine: { lineStyle: { color: c.axisLine } }, axisLabel: { color: c.label } },
+    yAxis: { type: 'value', name: '预约数', nameTextStyle: { color: c.label }, splitLine: { lineStyle: { color: c.splitLine } }, axisLabel: { color: c.label } },
     series: [{
       type: 'bar', data: d.peak.map((p) => p.count),
       itemStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: '#6b8fdd' }, { offset: 1, color: '#3b66da' }
+          { offset: 0, color: '#6b8fdd' }, { offset: 1, color: c.primary }
         ]),
         borderRadius: [5, 5, 0, 0]
       },
@@ -121,11 +134,11 @@ async function loadOverview() {
   if (!topChart) topChart = echarts.init(topEl.value)
   const tops = [...d.top_seats].reverse()
   topChart.setOption({
-    title: { text: '热门座位 Top 10', left: 'center', textStyle: { fontSize: 13, color: CHART.title, fontWeight: 600 } },
+    title: { text: '热门座位 Top 10', left: 'center', textStyle: { fontSize: 13, color: c.title, fontWeight: 600 } },
     grid: { top: 40, left: 130, right: 40, bottom: 30 },
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: '#1c2534', borderWidth: 0, textStyle: { color: '#fff', fontSize: 12 } },
-    xAxis: { type: 'value', name: '占用小时', nameTextStyle: { color: CHART.label }, splitLine: { lineStyle: { color: CHART.splitLine } }, axisLabel: { color: CHART.label } },
-    yAxis: { type: 'category', data: tops.map((t) => `${t.room_name.slice(0, 3)} ${t.seat_no}`), axisLine: { lineStyle: { color: CHART.axisLine } }, axisLabel: { color: CHART.label } },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: c.tooltipBg, borderColor: c.axisLine, borderWidth: 1, textStyle: { color: '#fff', fontSize: 12 } },
+    xAxis: { type: 'value', name: '占用小时', nameTextStyle: { color: c.label }, splitLine: { lineStyle: { color: c.splitLine } }, axisLabel: { color: c.label } },
+    yAxis: { type: 'category', data: tops.map((t) => `${t.room_name.slice(0, 3)} ${t.seat_no}`), axisLine: { lineStyle: { color: c.axisLine } }, axisLabel: { color: c.label } },
     series: [{
       type: 'bar', data: tops.map((t) => t.hours),
       itemStyle: {
@@ -134,10 +147,17 @@ async function loadOverview() {
         ]),
         borderRadius: [0, 5, 5, 0]
       },
-      label: { show: true, position: 'right', color: CHART.title, fontSize: 11 }
+      label: { show: true, position: 'right', color: c.title, fontSize: 11 }
     }]
   })
 }
+
+watch(() => themeStore.resolvedTheme, () => {
+  loadHeatmap()
+  if (overview.value) {
+    loadOverview()
+  }
+})
 
 async function init() {
   const resp = await getRooms()

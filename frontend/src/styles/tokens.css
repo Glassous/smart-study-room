@@ -2,6 +2,7 @@
    设计令牌 · Design Tokens
    方向：Calm / Academic / Modern / Intelligent / Clean
    冷调中性画布 · 低饱和蓝主色 · 绿=可用 · 琥珀=警示 · 红=危险
+   支持深浅色模式 (Light & Dark)
    ============================================================ */
 
 :root {
@@ -94,6 +95,154 @@
   --z-dialog: 400;
   --z-message: 500;
 
+  /* ---------- 遮罩与滚动条 ---------- */
+  --backdrop: rgba(23, 32, 54, .38);
+  --loading-mask: rgba(255, 255, 255, .72);
+  --scrollbar-thumb: #c3cbd9;
+  --scrollbar-thumb-hover: #a9b4c7;
+
+  /* ---------- 座位图状态色 ---------- */
+  --seat-free-bg: #e3f3ea;
+  --seat-free-border: #cdebd9;
+  --seat-free-color: var(--green-strong);
+  --seat-free-hover-bg: #d4eedf;
+  --seat-free-hover-border: #a9dfc0;
+
+  --seat-occupied-bg: #f8f0f0;
+  --seat-occupied-border: #eddcdc;
+  --seat-occupied-color: #b08a8a;
+
+  --seat-disabled-stripe: #e6e9f0;
+  --seat-tip-bg: var(--text-1);
+  --seat-tip-text: #ffffff;
+
+  /* ---------- 变体悬浮补充 ---------- */
+  --btn-soft-hover: #e7ecf4;
+  --btn-soft-success-hover: #d3eedf;
+  --btn-soft-danger-hover: #f6dcda;
+  --btn-soft-warn-hover: #f6e5c4;
+
+  --pill-info-bg: #e9edf6;
+  --pill-info-color: #4a5b76;
+
+  /* ---------- ECharts 图表色 ---------- */
+  --chart-axis: #d4dbe6;
+  --chart-split: #eef1f6;
+  --chart-label: #75819a;
+  --chart-title: #46536a;
+  --chart-split-area-1: #ffffff;
+  --chart-split-area-2: #f8fafc;
+  --chart-heat-empty: #f4f6f9;
+  --chart-heat-mid: #93b1ea;
+  --chart-heat-full: #3b66da;
+  --chart-heat-border: #ffffff;
+  --chart-tooltip-bg: #1c2534;
+
   /* ---------- 兼容旧变量 ---------- */
   --app-canvas-background: var(--canvas);
+}
+
+/* ============================================================
+   深色模式 · Dark Theme Tokens
+   冷调炭黑 / 深石墨质感 / 低眩光 / 高辨识度
+   ============================================================ */
+:root[data-theme="dark"],
+html.dark {
+  /* ---------- 画布与表面 ---------- */
+  --canvas: #0d121a;
+  --canvas-deep: #080c12;
+  --surface: #151b24;
+  --surface-2: #1b232f;
+  --surface-3: #232d3b;
+  --surface-hover: #293546;
+
+  /* ---------- 边界 ---------- */
+  --border: #263344;
+  --border-strong: #38495f;
+  --hairline: #1c2634;
+
+  /* ---------- 文字 ---------- */
+  --text-1: #f1f5fa;
+  --text-2: #c4d0de;
+  --text-3: #8393a7;
+  --text-4: #55657a;
+  --text-inverse: #ffffff;
+
+  /* ---------- 主色 · 暗黑发光蓝 ---------- */
+  --primary: #4f7cf6;
+  --primary-hover: #658ef8;
+  --primary-active: #3e6ce6;
+  --primary-weak: rgba(79, 124, 246, 0.18);
+  --primary-faint: rgba(79, 124, 246, 0.09);
+  --primary-ring: rgba(79, 124, 246, 0.38);
+
+  /* ---------- 功能色 ---------- */
+  --green: #28b376;
+  --green-strong: #38cb8a;
+  --green-weak: rgba(40, 179, 118, 0.18);
+  --green-faint: rgba(40, 179, 118, 0.09);
+
+  --amber: #e59a2a;
+  --amber-strong: #f5ae3e;
+  --amber-weak: rgba(229, 154, 42, 0.18);
+  --amber-faint: rgba(229, 154, 42, 0.09);
+
+  --red: #e55a52;
+  --red-strong: #f16e66;
+  --red-weak: rgba(229, 90, 82, 0.18);
+  --red-faint: rgba(229, 90, 82, 0.09);
+
+  --violet: #9985dd;
+  --violet-strong: #ab99ee;
+  --violet-weak: rgba(153, 133, 221, 0.18);
+  --violet-faint: rgba(153, 133, 221, 0.09);
+
+  /* ---------- 阴影（环境暗晕 + 边缘微光） ---------- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .45);
+  --shadow-2: 0 2px 8px rgba(0, 0, 0, .55);
+  --shadow-3: 0 4px 18px rgba(0, 0, 0, .68), 0 0 0 1px rgba(255, 255, 255, .05);
+  --shadow-4: 0 10px 36px rgba(0, 0, 0, .82), 0 0 0 1px rgba(255, 255, 255, .08);
+
+  /* ---------- 遮罩与滚动条 ---------- */
+  --backdrop: rgba(0, 0, 0, .68);
+  --loading-mask: rgba(13, 18, 26, .78);
+  --scrollbar-thumb: #334356;
+  --scrollbar-thumb-hover: #45576f;
+
+  /* ---------- 座位图状态色（深色模式优化发光与透射感） ---------- */
+  --seat-free-bg: rgba(40, 179, 118, 0.16);
+  --seat-free-border: rgba(40, 179, 118, 0.38);
+  --seat-free-color: #38cb8a;
+  --seat-free-hover-bg: rgba(40, 179, 118, 0.26);
+  --seat-free-hover-border: rgba(40, 179, 118, 0.55);
+
+  --seat-occupied-bg: rgba(229, 90, 82, 0.16);
+  --seat-occupied-border: rgba(229, 90, 82, 0.35);
+  --seat-occupied-color: #f16e66;
+
+  --seat-disabled-stripe: #273444;
+  --seat-tip-bg: #263344;
+  --seat-tip-text: #f1f5fa;
+
+  /* ---------- 变体悬浮补充 ---------- */
+  --btn-soft-hover: #2f3d50;
+  --btn-soft-success-hover: rgba(40, 179, 118, 0.28);
+  --btn-soft-danger-hover: rgba(229, 90, 82, 0.28);
+  --btn-soft-warn-hover: rgba(229, 154, 42, 0.28);
+
+  --pill-info-bg: rgba(79, 124, 246, 0.16);
+  --pill-info-color: #658ef8;
+
+  /* ---------- ECharts 图表色 ---------- */
+  --chart-axis: #283547;
+  --chart-split: #1c2635;
+  --chart-label: #8393a7;
+  --chart-title: #f1f5fa;
+  --chart-split-area-1: #151b24;
+  --chart-split-area-2: #1b232f;
+  --chart-heat-empty: #1b232f;
+  --chart-heat-mid: #2e5199;
+  --chart-heat-full: #4f7cf6;
+  --chart-heat-border: #151b24;
+  --chart-tooltip-bg: #151b24;
 }

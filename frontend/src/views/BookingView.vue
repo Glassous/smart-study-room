@@ -452,9 +452,9 @@ onMounted(loadRooms)
   display: inline-block;
   border: 1px solid transparent;
 }
-.dot-free     { background: #e3f3ea; border-color: #c4e7d4; }
+.dot-free     { background: var(--seat-free-bg); border-color: var(--seat-free-border); }
 .dot-selected { background: var(--primary); }
-.dot-occupied { background: #f6e9e9; border-color: #ecd7d7; }
+.dot-occupied { background: var(--seat-occupied-bg); border-color: var(--seat-occupied-border); }
 .dot-disabled { background: var(--surface-3); border-color: var(--border); }
 
 /* 座位图 */
@@ -505,13 +505,13 @@ onMounted(loadRooms)
   transform: translateY(-1px);
 }
 .seat-free {
-  background: #e3f3ea;
-  color: var(--green-strong);
-  border-color: #cdebd9;
+  background: var(--seat-free-bg);
+  color: var(--seat-free-color);
+  border-color: var(--seat-free-border);
 }
 .seat-free:hover {
-  background: #d4eedf;
-  border-color: #a9dfc0;
+  background: var(--seat-free-hover-bg);
+  border-color: var(--seat-free-hover-border);
 }
 .seat-selected {
   background: var(--primary);
@@ -520,19 +520,19 @@ onMounted(loadRooms)
   box-shadow: 0 0 0 3px var(--primary-ring), 0 4px 12px rgba(59, 102, 218, .32);
 }
 .seat-occupied {
-  background: #f8f0f0;
-  color: #b08a8a;
-  border-color: #eddcdc;
+  background: var(--seat-occupied-bg);
+  color: var(--seat-occupied-color);
+  border-color: var(--seat-occupied-border);
   cursor: not-allowed;
 }
 .seat-disabled {
   background:
-    repeating-linear-gradient(135deg, var(--surface-3) 0 5px, #e6e9f0 5px 9px);
+    repeating-linear-gradient(135deg, var(--surface-3) 0 5px, var(--seat-disabled-stripe) 5px 9px);
   color: var(--text-4);
   border-color: var(--border);
   cursor: not-allowed;
   text-decoration: line-through;
-  text-decoration-color: #a9b2c2;
+  text-decoration-color: var(--text-4);
 }
 
 /* 座位悬浮提示 */
@@ -540,8 +540,8 @@ onMounted(loadRooms)
   position: fixed;
   z-index: var(--z-popover);
   transform: translate(-50%, calc(-100% - 10px));
-  background: var(--text-1);
-  color: #fff;
+  background: var(--seat-tip-bg);
+  color: var(--seat-tip-text);
   font-size: var(--fs-caption);
   padding: 5px 10px;
   border-radius: var(--r-sm);
@@ -558,7 +558,7 @@ onMounted(loadRooms)
   width: 8px;
   height: 8px;
   transform: translateX(-50%) rotate(45deg);
-  background: var(--text-1);
+  background: var(--seat-tip-bg);
 }
 
 /* 已选条 */
@@ -568,7 +568,7 @@ onMounted(loadRooms)
   justify-content: space-between;
   gap: 16px;
   background: var(--primary-faint);
-  border-color: #dde6fa;
+  border-color: var(--border-strong);
 }
 .sel-info {
   display: flex;

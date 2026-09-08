@@ -6,14 +6,19 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import App from './App.vue'
 import router from './router'
 import { loadingDirective } from './components/ui/loading'
+import { useThemeStore } from './stores/theme'
 import './styles/main.css'
 
 gsap.registerPlugin(ScrollTrigger)
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
 app.directive('loading', loadingDirective)
+
+const themeStore = useThemeStore(pinia)
+themeStore.initTheme()
 
 app.mount('#app')
