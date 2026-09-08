@@ -62,6 +62,19 @@ svg {
   outline-offset: 2px;
 }
 
+/* ---------- 触屏 / 响应式点击反馈 ----------
+   1) 禁用 WebKit 系统自带 tap 高亮（点击瞬间的蓝/灰蒙层）
+   2) 触屏为主的设备上，点击操作不再残留蓝色焦点环（键盘导航不受影响） */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  :focus-visible {
+    outline: none !important;
+  }
+}
+
 ::selection {
   background: var(--primary-weak);
   color: var(--text-1);

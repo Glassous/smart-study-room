@@ -34,6 +34,18 @@ const selected = ref(null)
 
 const zoneName = { quiet: '静音区', regular: '普通区', discussion: '研讨区', computer: '机房区' }
 
+// 桌型（由 zone + has_power 推导）：机房=电脑桌，有电源=插座桌，其余=普通桌
+function seatType(s) {
+  if (s.zone === 'computer') return '电脑桌'
+  if (s.has_power) return '插座桌'
+  return '普通桌'
+}
+function seatIcon(s) {
+  if (s.zone === 'computer') return 'desk-pc'
+  if (s.has_power) return 'desk-power'
+  return 'desk-book'
+}
+
 async function loadRooms() {
   const resp = await getRooms()
   rooms.value = resp.data || []
@@ -60,23 +72,68 @@ async function loadSeatMap() {
   }
 }
 
-// 行列网格
+// 行列网格（座位区）
 const gridStyle = computed(() => ({
-  display: 'grid',
-  gridTemplateColumns: `repeat(${room.value?.seat_cols || 8}, minmax(44px, 1fr))`,
-  gap: '8px',
-  minWidth: `${Math.max(520, (room.value?.seat_cols || 8) * 50 + ((room.value?.seat_cols || 8) - 1) * 8 + 28)}px`
+  gridTemplateColumns: `repeat(${room.value?.seat_cols || 8}, minmax(56px, 1fr))`,
+  gap: '8px'
 }))
 
+// 房间框架（墙/窗包裹座位区），最小宽度保证小容器可横向滚动
+const frameStyle = computed(() => {
+  const cols = room.value?.seat_cols || 8
+  const contentMin = cols * 56 + (cols - 1) * 8 + 16 + 36
+  return { minWidth: `${Math.max(480, contentMin)}px` }
+})
+
+// 靠窗方位：某条边只有当其全部座位连续靠窗时才判定为窗（避免角落座位误判两条边）
+const windowSides = computed(() => {
+  const sides = { top: false, bottom: false, left: false, right: false }
+  if (!room.value || !seats.value.length) return sides
+  const rows = room.value.seat_rows
+  const cols = room.value.seat_cols
+
+  const edge = { top: [], bottom: [], left: [], right: [] }
+  for (const s of seats.value) {
+    if (s.row_no === 1) edge.top.push(s)
+    if (s.row_no === rows) edge.bottom.push(s)
+    if (s.col_no === 1) edge.left.push(s)
+    if (s.col_no === cols) edge.right.push(s)
+  }
+  // 顶/底边 = 一行（cols 个座位）；左/右边 = 一列（rows 个座位），且需整条边全部靠窗
+  sides.top = edge.top.length === cols && edge.top.every((s) => s.near_window)
+  sides.bottom = edge.bottom.length === cols && edge.bottom.every((s) => s.near_window)
+  sides.left = edge.left.length === rows && edge.left.every((s) => s.near_window)
+  sides.right = edge.right.length === rows && edge.right.every((s) => s.near_window)
+  return sides
+})
+
+// 靠窗座位旁的窗条方向：仅在该侧边确认为窗时渲染
+function nearWindowSide(s) {
+  const sides = windowSides.value
+  const rows = room.value?.seat_rows || 0
+  const cols = room.value?.seat_cols || 0
+  if (sides.right && s.col_no === cols) return 'seat-near-window-right'
+  if (sides.left && s.col_no === 1) return 'seat-near-window-left'
+  if (sides.top && s.row_no === 1) return 'seat-near-window-top'
+  if (sides.bottom && s.row_no === rows) return 'seat-near-window-bottom'
+  return ''
+}
+
 function seatClass(s) {
-  if (s.status !== 'available') return 'seat seat-disabled'
-  if (s.occupied) return 'seat seat-occupied'
-  if (selected.value?.id === s.id) return 'seat seat-selected'
-  return 'seat seat-free'
+  let cls
+  if (s.status !== 'available') cls = 'seat seat-disabled'
+  else if (s.occupied) cls = 'seat seat-occupied'
+  else if (selected.value?.id === s.id) cls = 'seat seat-selected'
+  else cls = 'seat seat-free'
+  if (s.near_window) {
+    const side = nearWindowSide(s)
+    if (side) cls += ' ' + side
+  }
+  return cls
 }
 
 function seatTip(s) {
-  return `${s.seat_no} · ${zoneName[s.zone] || s.zone}${s.has_power ? ' · 电源' : ''}${s.near_window ? ' · 靠窗' : ''}${s.status !== 'available' ? ' · ' + (s.status === 'maintenance' ? '维护中' : '停用') : ''}`
+  return `${s.seat_no} · ${seatType(s)} · ${zoneName[s.zone] || s.zone}${s.near_window ? ' · 靠窗' : ''}${s.status !== 'available' ? ' · ' + (s.status === 'maintenance' ? '维护中' : '停用') : ''}`
 }
 
 // 座位悬浮提示（共享单例，fixed 定位避免被滚动容器裁剪）
@@ -283,6 +340,12 @@ onMounted(loadRooms)
           </SButton>
         </div>
         <div class="legend">
+          <div class="legend-item"><span class="type-ico"><AppIcon name="desk-book" :size="16" /></span><span>普通桌</span></div>
+          <div class="legend-item"><span class="type-ico"><AppIcon name="desk-power" :size="16" /></span><span>插座桌</span></div>
+          <div class="legend-item"><span class="type-ico"><AppIcon name="desk-pc" :size="16" /></span><span>电脑桌</span></div>
+          <div class="legend-item"><span class="type-ico type-ico--window" /><span>窗户</span></div>
+        </div>
+        <div class="legend legend--status">
           <div class="legend-item"><span class="dot dot-free" /><span>空闲（可预约）</span></div>
           <div class="legend-item"><span class="dot dot-selected" /><span>已选中</span></div>
           <div class="legend-item"><span class="dot dot-occupied" /><span>占用</span></div>
@@ -306,18 +369,36 @@ onMounted(loadRooms)
         <div class="responsive-scroll" tabindex="0" aria-label="座位平面图，可左右滑动">
         <div v-loading="loading" class="seat-grid-wrap" @mouseover="onGridOver" @mouseleave="onGridLeave">
           <div v-if="!room" class="empty-tip muted">请先在左侧选择自习室并设置预约条件</div>
-          <div v-else :style="gridStyle" class="seat-grid">
-            <div
-              v-for="s in seats"
-              :key="s.id"
-              :class="seatClass(s)"
-              :data-id="s.id"
-              role="button"
-              :aria-label="seatTip(s)"
-              tabindex="-1"
-              @click="onSeatClick(s)"
-            >
-              {{ s.seat_no }}
+          <div v-else :style="frameStyle" class="room-frame">
+            <!-- 顶部：窗或墙 -->
+            <div class="wall wall-top" :class="{ window: windowSides.top }" aria-hidden="true"></div>
+            <!-- 左：窗或墙 -->
+            <div class="wall wall-left" :class="{ window: windowSides.left }" aria-hidden="true"></div>
+            <!-- 座位网格 -->
+            <div :style="gridStyle" class="seat-grid">
+              <div
+                v-for="s in seats"
+                :key="s.id"
+                :class="seatClass(s)"
+                :data-id="s.id"
+                role="button"
+                :aria-label="seatTip(s)"
+                tabindex="-1"
+                @click="onSeatClick(s)"
+              >
+                <span class="seat-icon"><AppIcon :name="seatIcon(s)" :size="28" /></span>
+                <span class="seat-no">{{ s.seat_no }}</span>
+              </div>
+            </div>
+            <!-- 右：窗或墙 -->
+            <div class="wall wall-right" :class="{ window: windowSides.right }" aria-hidden="true"></div>
+            <!-- 底部：窗或墙（有门时底部为墙） -->
+            <div class="wall wall-bottom" :class="{ window: windowSides.bottom }">
+              <template v-if="!windowSides.bottom">
+                <span class="wall-seg" aria-hidden="true"></span>
+                <span class="door" aria-hidden="true"></span>
+                <span class="wall-seg" aria-hidden="true"></span>
+              </template>
             </div>
           </div>
         </div>
@@ -457,6 +538,28 @@ onMounted(loadRooms)
 .dot-occupied { background: var(--seat-occupied-bg); border-color: var(--seat-occupied-border); }
 .dot-disabled { background: var(--surface-3); border-color: var(--border); }
 
+/* 桌型 / 窗户 图例 */
+.type-ico {
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--text-3);
+  flex: 0 0 auto;
+}
+.type-ico--window {
+  background:
+    linear-gradient(180deg, var(--window-glass-hi), transparent 60%),
+    repeating-linear-gradient(90deg, var(--window-frame) 0 2px, var(--window-glass) 2px 8px);
+  border: 1px solid var(--window-frame);
+  border-radius: 3px;
+}
+.legend--status {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
 /* 座位图 */
 .seat-card {
   min-height: 0;
@@ -466,36 +569,94 @@ onMounted(loadRooms)
 }
 .seat-grid-wrap {
   margin-top: 8px;
-  padding: 20px;
+  padding: 12px;
   background: var(--surface-2);
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
   min-height: 280px;
   display: grid;
-  place-items: start center;
+  place-items: start stretch;
 }
 .empty-tip {
   padding: 60px 0;
   font-size: var(--fs-body);
 }
-.seat-grid {
+/* 房间框架：墙 + 窗 + 门 包裹座位区 */
+.room-frame {
   width: 100%;
-  max-width: 640px;
-  padding: 14px;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 18px;
+  grid-template-rows: 18px auto 18px;
   border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.wall { background: var(--wall-solid); }
+.wall-top { grid-column: 1 / -1; grid-row: 1; }
+.wall-left { grid-column: 1; grid-row: 2; }
+.wall-right { grid-column: 3; grid-row: 2; }
+.wall-bottom {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: flex;
+  align-items: stretch;
+}
+.wall-seg { flex: 1 1 auto; }
+
+/* 窗户：水平墙（顶/底）竖窗棂，竖直墙（左/右）横窗棂 */
+.wall-top.window,
+.wall-bottom.window {
+  background:
+    linear-gradient(180deg, var(--window-glass-hi), transparent 60%),
+    repeating-linear-gradient(90deg, var(--window-frame) 0 3px, var(--window-glass) 3px 22px);
+}
+.wall-left.window,
+.wall-right.window {
+  background:
+    linear-gradient(90deg, var(--window-glass-hi), transparent 60%),
+    repeating-linear-gradient(180deg, var(--window-frame) 0 3px, var(--window-glass) 3px 22px);
+}
+
+/* 门：底墙中间开口 */
+.door {
+  flex: 0 0 46px;
+  position: relative;
+  background: var(--door);
+  border: 2px solid var(--door-frame);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+.door::after {
+  content: '';
+  position: absolute;
+  right: 7px;
+  top: 6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--door-frame);
+}
+
+/* 座位区 */
+.seat-grid {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  display: grid;
+  padding: 8px;
+  background: var(--room-floor);
 }
 .seat {
-  aspect-ratio: 1 / 1;
+  min-height: 48px;
   border-radius: var(--r-md);
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   font-variant-numeric: tabular-nums;
   letter-spacing: .02em;
   cursor: pointer;
+  position: relative;
   transition: transform var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease),
     background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
   user-select: none;
@@ -504,6 +665,43 @@ onMounted(loadRooms)
 .seat:hover {
   transform: translateY(-1px);
 }
+.seat-icon {
+  display: grid;
+  place-items: center;
+  line-height: 0;
+  opacity: .92;
+}
+.seat-no {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: .85;
+}
+/* 靠窗座位：桌面靠窗一侧淡蓝窗条（方向随数据） */
+.seat-near-window-right::after,
+.seat-near-window-left::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--window-frame);
+}
+.seat-near-window-right::after { right: 3px; }
+.seat-near-window-left::after { left: 3px; }
+.seat-near-window-top::after,
+.seat-near-window-bottom::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--window-frame);
+}
+.seat-near-window-top::after { top: 3px; }
+.seat-near-window-bottom::after { bottom: 3px; }
 .seat-free {
   background: var(--seat-free-bg);
   color: var(--seat-free-color);

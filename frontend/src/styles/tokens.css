@@ -116,6 +116,15 @@
   --seat-tip-bg: var(--text-1);
   --seat-tip-text: #ffffff;
 
+  /* ---------- 房间平面图示意色（地面/墙/窗/门） ---------- */
+  --room-floor: #f2f5f9;
+  --wall-solid: #dde4ee;
+  --window-glass: #cfe5f8;
+  --window-glass-hi: #eaf5fe;
+  --window-frame: #b6d2ea;
+  --door: #f8fafc;
+  --door-frame: #c9d3e0;
+
   /* ---------- 变体悬浮补充 ---------- */
   --btn-soft-hover: #e7ecf4;
   --btn-soft-success-hover: #d3eedf;
@@ -223,6 +232,15 @@ html.dark {
   --seat-disabled-stripe: #273444;
   --seat-tip-bg: #263344;
   --seat-tip-text: #f1f5fa;
+
+  /* ---------- 房间平面图示意色（地面/墙/窗/门） ---------- */
+  --room-floor: #131a23;
+  --wall-solid: #232d3b;
+  --window-glass: rgba(92, 148, 210, 0.32);
+  --window-glass-hi: rgba(150, 200, 245, 0.14);
+  --window-frame: rgba(120, 172, 225, 0.5);
+  --door: #1b232f;
+  --door-frame: #38495f;
 
   /* ---------- 变体悬浮补充 ---------- */
   --btn-soft-hover: #2f3d50;

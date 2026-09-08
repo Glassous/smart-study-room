@@ -81,6 +81,20 @@ defineProps({
       <path d="M3.2 16.4a1.8 1.8 0 0 0 1.8 1.8h14a1.8 1.8 0 0 0 1.8-1.8v-4.9a2 2 0 0 0-4 0v1.6H7.2v-1.6a2 2 0 0 0-4 0v4.9Z" stroke="currentColor" stroke-width="1.7" />
       <path d="M5 18.2v2.4M19 18.2v2.4" stroke="currentColor" stroke-width="1.7" />
     </g>
+    <g v-else-if="name === 'desk-book'">
+      <rect x="7.5" y="4.5" width="9" height="14" rx="1.2" stroke="currentColor" stroke-width="1.7" />
+      <path d="M12 4.5v14" stroke="currentColor" stroke-width="1.5" />
+    </g>
+    <g v-else-if="name === 'desk-power'">
+      <rect x="7.5" y="3.5" width="9" height="12" rx="2" stroke="currentColor" stroke-width="1.7" />
+      <path d="M10.2 6.2v2.1M13.8 6.2v2.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+      <path d="M13.6 10.2 11.2 14h2l-.9 3 2.9-4.3h-2l.4-2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+    </g>
+    <g v-else-if="name === 'desk-pc'">
+      <rect x="3.8" y="4" width="16.4" height="10.8" rx="1.7" stroke="currentColor" stroke-width="1.7" />
+      <path d="M12 14.8v2.2M8.3 19.3h7.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+      <path d="M7.2 12.3l2.2-2.2 1.8 1.8 3.2-3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
     <g v-else-if="name === 'eye'">
       <path d="M2 12s3.7-7.4 10-7.4S22 12 22 12s-3.7 7.4-10 7.4S2 12 2 12Z" stroke="currentColor" stroke-width="1.6" />
       <circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.7" />
