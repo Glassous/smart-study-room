@@ -1,5 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import SeatExplorer from '../components/seat3d/SeatExplorer.vue'
+import SeatPlanDesk from '../components/SeatPlanDesk.vue'
+import { seatType, zoneName, getWindowSides } from '../components/seat3d/seatPresentation'
 import { message, confirmDialog } from '../components/ui/feedback'
 import { getRooms, getSeatMap } from '../api/room'
 import { createReservation, autoAllocate } from '../api/reservation'
@@ -32,18 +35,16 @@ const seats = ref([])
 const loading = ref(false)
 const selected = ref(null)
 
-const zoneName = { quiet: '静音区', regular: '普通区', discussion: '研讨区', computer: '机房区' }
-
-// 桌型（由 zone + has_power 推导）：机房=电脑桌，有电源=插座桌，其余=普通桌
-function seatType(s) {
-  if (s.zone === 'computer') return '电脑桌'
-  if (s.has_power) return '插座桌'
-  return '普通桌'
-}
-function seatIcon(s) {
-  if (s.zone === 'computer') return 'desk-pc'
-  if (s.has_power) return 'desk-power'
-  return 'desk-book'
+const seatCard = ref(null)
+const explorer = ref(null)
+const show3D = ref(false)
+const submitting = ref(false)
+const mapError = ref(false)
+let mapRequest = 0
+function open3D() {
+  if (!room.value || loading.value || mapError.value || !seats.value.length) return
+  hoverTip.value = null
+  show3D.value = true
 }
 
 async function loadRooms() {
@@ -55,57 +56,51 @@ async function loadRooms() {
   }
 }
 
-async function loadSeatMap() {
+async function loadSeatMap(preserveSelection = false) {
+  const requestId = ++mapRequest
   if (!roomId.value || !date.value || !start.value || !end.value) return
   if (start.value >= end.value) {
+    mapError.value = true
+    selected.value = null
+    loading.value = false
     message.warning('开始时间需早于结束时间')
     return
   }
   loading.value = true
+  mapError.value = false
+  const previousId = preserveSelection === true ? selected.value?.id : null
   selected.value = null
   try {
     const resp = await getSeatMap(roomId.value, date.value, start.value, end.value)
+    if (requestId !== mapRequest) return
     room.value = resp.data.room
     seats.value = resp.data.seats || []
+    if (previousId) {
+      selected.value = seats.value.find(s => s.id === previousId && s.status === 'available' && !s.occupied) || null
+      if (!selected.value) message.info('该座位状态已变化，请重新选择')
+    }
+  } catch {
+    if (requestId === mapRequest) { mapError.value = true; selected.value = null; seats.value = [] }
   } finally {
-    loading.value = false
+    if (requestId === mapRequest) loading.value = false
   }
 }
 
 // 行列网格（座位区）
 const gridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${room.value?.seat_cols || 8}, minmax(56px, 1fr))`,
-  gap: '8px'
+  gridTemplateColumns: `repeat(${room.value?.seat_cols || 8}, minmax(76px, 1fr))`,
+  gap: '10px'
 }))
 
 // 房间框架（墙/窗包裹座位区），最小宽度保证小容器可横向滚动
 const frameStyle = computed(() => {
   const cols = room.value?.seat_cols || 8
-  const contentMin = cols * 56 + (cols - 1) * 8 + 16 + 36
+  const contentMin = cols * 76 + (cols - 1) * 10 + 24 + 36
   return { minWidth: `${Math.max(480, contentMin)}px` }
 })
 
 // 靠窗方位：某条边只有当其全部座位连续靠窗时才判定为窗（避免角落座位误判两条边）
-const windowSides = computed(() => {
-  const sides = { top: false, bottom: false, left: false, right: false }
-  if (!room.value || !seats.value.length) return sides
-  const rows = room.value.seat_rows
-  const cols = room.value.seat_cols
-
-  const edge = { top: [], bottom: [], left: [], right: [] }
-  for (const s of seats.value) {
-    if (s.row_no === 1) edge.top.push(s)
-    if (s.row_no === rows) edge.bottom.push(s)
-    if (s.col_no === 1) edge.left.push(s)
-    if (s.col_no === cols) edge.right.push(s)
-  }
-  // 顶/底边 = 一行（cols 个座位）；左/右边 = 一列（rows 个座位），且需整条边全部靠窗
-  sides.top = edge.top.length === cols && edge.top.every((s) => s.near_window)
-  sides.bottom = edge.bottom.length === cols && edge.bottom.every((s) => s.near_window)
-  sides.left = edge.left.length === rows && edge.left.every((s) => s.near_window)
-  sides.right = edge.right.length === rows && edge.right.every((s) => s.near_window)
-  return sides
-})
+const windowSides = computed(() => getWindowSides(room.value, seats.value))
 
 // 靠窗座位旁的窗条方向：仅在该侧边确认为窗时渲染
 function nearWindowSide(s) {
@@ -155,6 +150,7 @@ function onGridLeave() {
 }
 
 function onSeatClick(s) {
+  if (loading.value || mapError.value || submitting.value) return
   if (s.status !== 'available') {
     message.info(s.status === 'maintenance' ? '该座位维护中' : '该座位已停用')
     return
@@ -168,22 +164,28 @@ function onSeatClick(s) {
 
 async function confirmBooking() {
   const s = selected.value
-  if (!s) return
+  if (!s || submitting.value || loading.value || mapError.value || s.status !== 'available' || s.occupied) return
+  const payload = { seat_id: s.id, date: date.value, start_time: start.value, end_time: end.value }
+  submitting.value = true
   try {
+    try {
     await confirmDialog(
-      `确认预约 ${room.value.name} ${s.seat_no} 座位？\n日期：${date.value}　时段：${start.value} - ${end.value}`,
+      `确认预约 ${room.value.name} ${s.seat_no} 座位？\n日期：${payload.date}　时段：${payload.start_time} - ${payload.end_time}`,
       '预约确认',
       { confirmButtonText: '确认预约', cancelButtonText: '再想想' }
     )
-  } catch {
-    return
-  }
-  const resp = await createReservation({
-    seat_id: s.id, date: date.value, start_time: start.value, end_time: end.value
-  })
-  message.success(`预约成功：${resp.data.room_name} ${resp.data.seat_no}`)
-  selected.value = null
-  loadSeatMap()
+    } catch { return }
+    try {
+      const resp = await createReservation(payload)
+      message.success(`预约成功：${resp.data.room_name} ${resp.data.seat_no}`)
+    } catch {
+      await loadSeatMap(true)
+      return
+    }
+    selected.value = null
+    await loadSeatMap()
+    explorer.value?.close()
+  } finally { submitting.value = false }
 }
 
 // ---- 智能分配 ----
@@ -356,10 +358,10 @@ onMounted(loadRooms)
 
     <!-- 右栏：座位平面图 + 已选条 -->
     <div class="split-right">
-      <section class="card seat-card">
+      <section ref="seatCard" class="card seat-card">
         <div class="card-title-row">
           <div>
-            <h3 style="margin:0">座位平面图</h3>
+            <div class="seat-heading"><h3 style="margin:0">座位平面图</h3><SButton :disabled="!room || loading || mapError || !seats.length" aria-label="打开 3D 选座" @click="open3D">3D</SButton></div>
             <div v-if="room" class="room-meta muted">
               {{ room.name }} · {{ room.location }} · 开放 {{ room.open_time?.slice(0, 5) }}–{{ room.close_time?.slice(0, 5) }} · {{ room.seat_rows }}×{{ room.seat_cols }}
             </div>
@@ -376,19 +378,21 @@ onMounted(loadRooms)
             <div class="wall wall-left" :class="{ window: windowSides.left }" aria-hidden="true"></div>
             <!-- 座位网格 -->
             <div :style="gridStyle" class="seat-grid">
-              <div
+              <button
                 v-for="s in seats"
                 :key="s.id"
                 :class="seatClass(s)"
                 :data-id="s.id"
-                role="button"
+                type="button"
+                :style="{ gridRow: s.row_no, gridColumn: s.col_no }"
                 :aria-label="seatTip(s)"
-                tabindex="-1"
+                :aria-pressed="selected?.id === s.id"
+                :aria-disabled="s.status !== 'available' || s.occupied || loading || submitting"
                 @click="onSeatClick(s)"
               >
-                <span class="seat-icon"><AppIcon :name="seatIcon(s)" :size="28" /></span>
+                <SeatPlanDesk :computer="s.zone === 'computer'" :power="s.has_power" />
                 <span class="seat-no">{{ s.seat_no }}</span>
-              </div>
+              </button>
             </div>
             <!-- 右：窗或墙 -->
             <div class="wall wall-right" :class="{ window: windowSides.right }" aria-hidden="true"></div>
@@ -425,10 +429,12 @@ onMounted(loadRooms)
             </template>
           </div>
         </div>
-        <SButton variant="primary" size="lg" :disabled="!selected" @click="confirmBooking">提交预约</SButton>
+        <SButton variant="primary" size="lg" :disabled="!selected || loading || mapError" :loading="submitting" @click="confirmBooking">提交预约</SButton>
       </section>
     </div>
   </div>
+
+  <SeatExplorer v-if="show3D" ref="explorer" :origin="seatCard" :room="room" :seats="seats" :selected-id="selected?.id" :date="date" :start="start" :end="end" :loading="loading" :submitting="submitting" @select="onSeatClick" @submit="confirmBooking" @closed="show3D = false" />
 
   <!-- 座位悬浮提示 -->
   <Teleport to="body">
@@ -487,6 +493,8 @@ onMounted(loadRooms)
 </template>
 
 <style scoped>
+.seat-card > .card-title-row > div { width: 100%; }
+.seat-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .booking-split {
   grid-template-columns: 320px 1fr;
   align-items: start;
@@ -564,6 +572,8 @@ onMounted(loadRooms)
 .seat-card {
   min-height: 0;
 }
+.booking-split > .split-right { align-self: start; }
+.booking-split > .split-right > .seat-card:first-child { flex: 0 0 auto; }
 .room-meta {
   margin-top: 3px;
 }
@@ -573,7 +583,7 @@ onMounted(loadRooms)
   background: var(--surface-2);
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
-  min-height: 280px;
+  min-height: 0;
   display: grid;
   place-items: start stretch;
 }
@@ -590,7 +600,7 @@ onMounted(loadRooms)
   border-radius: var(--r-lg);
   overflow: hidden;
 }
-.wall { background: var(--wall-solid); }
+.wall { background: linear-gradient(135deg, #ffffff12, #00000010), var(--wall-solid); box-shadow: inset 0 1px 0 #ffffff12, inset 0 -2px 3px #0002; }
 .wall-top { grid-column: 1 / -1; grid-row: 1; }
 .wall-left { grid-column: 1; grid-row: 2; }
 .wall-right { grid-column: 3; grid-row: 2; }
@@ -615,6 +625,7 @@ onMounted(loadRooms)
     linear-gradient(90deg, var(--window-glass-hi), transparent 60%),
     repeating-linear-gradient(180deg, var(--window-frame) 0 3px, var(--window-glass) 3px 22px);
 }
+.wall.window { box-shadow: inset 0 0 0 1px var(--window-frame), inset 3px 0 8px #d0f3ff22, 0 0 12px #95d5ff15; }
 
 /* 门：底墙中间开口 */
 .door {
@@ -642,17 +653,22 @@ onMounted(loadRooms)
   grid-row: 2;
   min-width: 0;
   display: grid;
-  padding: 8px;
-  background: var(--room-floor);
+  padding: 12px;
+  background: linear-gradient(125deg, #d5e6ef0c, transparent 65%), repeating-linear-gradient(0deg, transparent 0 43px, #87999d12 43px 44px), repeating-linear-gradient(90deg, transparent 0 87px, #87999d12 87px 88px), var(--room-floor);
+  box-shadow: inset 0 2px 8px #00000012;
 }
 .seat {
-  min-height: 48px;
+  min-height: 82px;
+  min-width: 0;
+  padding: 6px 3px;
+  appearance: none;
+  font-family: inherit;
   border-radius: var(--r-md);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 5px;
   font-variant-numeric: tabular-nums;
   letter-spacing: .02em;
   cursor: pointer;
@@ -665,18 +681,18 @@ onMounted(loadRooms)
 .seat:hover {
   transform: translateY(-1px);
 }
-.seat-icon {
-  display: grid;
-  place-items: center;
-  line-height: 0;
-  opacity: .92;
-}
+.seat:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; z-index: 1; }
+.seat[aria-disabled='true']:hover { transform: none; }
 .seat-no {
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
-  opacity: .85;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 1;
 }
+.seat-no::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 5px currentColor; }
 /* 靠窗座位：桌面靠窗一侧淡蓝窗条（方向随数据） */
 .seat-near-window-right::after,
 .seat-near-window-left::after {
@@ -703,16 +719,17 @@ onMounted(loadRooms)
 .seat-near-window-top::after { top: 3px; }
 .seat-near-window-bottom::after { bottom: 3px; }
 .seat-free {
-  background: var(--seat-free-bg);
+  background: linear-gradient(145deg, #ffffff09, transparent), color-mix(in srgb, var(--seat-free-bg) 55%, transparent);
   color: var(--seat-free-color);
   border-color: var(--seat-free-border);
+  box-shadow: inset 0 1px 0 #ffffff0c, 0 2px 3px #0000000a;
 }
 .seat-free:hover {
   background: var(--seat-free-hover-bg);
   border-color: var(--seat-free-hover-border);
 }
 .seat-selected {
-  background: var(--primary);
+  background: linear-gradient(135deg, #ffffff22, transparent), var(--primary);
   color: #fff;
   border-color: var(--primary-active);
   box-shadow: 0 0 0 3px var(--primary-ring), 0 4px 12px rgba(59, 102, 218, .32);
@@ -732,6 +749,8 @@ onMounted(loadRooms)
   text-decoration: line-through;
   text-decoration-color: var(--text-4);
 }
+.seat-disabled :deep(.plan-desk), .seat-occupied :deep(.plan-desk) { filter: saturate(.4) brightness(.85); }
+@media (prefers-reduced-motion: reduce) { .seat { transition: none; }.seat:hover { transform: none; } }
 
 /* 座位悬浮提示 */
 .seat-hover-tip {
