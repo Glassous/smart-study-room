@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/imicola/smart-study-room/backend/internal/model"
+	"github.com/imicola/smart-study-room/backend/internal/pkg/rediscache"
 	"github.com/imicola/smart-study-room/backend/internal/repository"
 )
 
@@ -16,10 +18,16 @@ type StatsService struct {
 	stats *repository.StatsRepo
 	seats *repository.SeatRepo
 	rooms *repository.RoomRepo
+	cache *rediscache.Helper
 }
 
 func NewStatsService(stats *repository.StatsRepo, seats *repository.SeatRepo, rooms *repository.RoomRepo) *StatsService {
 	return &StatsService{stats: stats, seats: seats, rooms: rooms}
+}
+
+// SetCache 设置缓存辅助器
+func (s *StatsService) SetCache(cache *rediscache.Helper) {
+	s.cache = cache
 }
 
 // Heatmap 座位热力图(房间×日期)
@@ -30,6 +38,16 @@ func (s *StatsService) Heatmap(ctx context.Context, roomID int64, date string) (
 	if _, err := time.Parse("2006-01-02", date); err != nil {
 		return nil, ErrStatsBadArg
 	}
+
+	cacheKey := fmt.Sprintf("studyroom:cache:stats:heatmap:%d:%s", roomID, date)
+	if s.cache != nil {
+		var cached model.HeatmapResponse
+		hit, err := s.cache.Get(ctx, cacheKey, &cached)
+		if err == nil && hit {
+			return &cached, nil
+		}
+	}
+
 	room, err := s.rooms.GetByID(ctx, roomID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -92,13 +110,17 @@ func (s *StatsService) Heatmap(ctx context.Context, roomID int64, date string) (
 		}
 	}
 
-	return &model.HeatmapResponse{
+	resp := &model.HeatmapResponse{
 		Room:        room,
 		Hours:       hourList,
 		Seats:       seats,
 		Cells:       cells,
 		HourlyUsage: hourly,
-	}, nil
+	}
+	if s.cache != nil {
+		_ = s.cache.Set(ctx, cacheKey, resp, 3*time.Minute)
+	}
+	return resp, nil
 }
 
 // Trend 近 N 天使用率趋势
@@ -156,6 +178,15 @@ func (s *StatsService) TopSeats(ctx context.Context, days, limit int) ([]*model.
 
 // Overview 运营总览(今日 + 趋势 + 高峰 + 热门)
 func (s *StatsService) Overview(ctx context.Context) (*model.StatsOverview, error) {
+	cacheKey := "studyroom:cache:stats:overview"
+	if s.cache != nil {
+		var cached model.StatsOverview
+		hit, err := s.cache.Get(ctx, cacheKey, &cached)
+		if err == nil && hit {
+			return &cached, nil
+		}
+	}
+
 	totalSeats, activeToday, inUseNow, usedHours, capHours, err := s.stats.TodaySummary(ctx)
 	if err != nil {
 		return nil, err
@@ -176,7 +207,7 @@ func (s *StatsService) Overview(ctx context.Context) (*model.StatsOverview, erro
 	if err != nil {
 		return nil, err
 	}
-	return &model.StatsOverview{
+	resp := &model.StatsOverview{
 		TotalSeats:       totalSeats,
 		ActiveToday:      activeToday,
 		InUseNow:         inUseNow,
@@ -184,5 +215,9 @@ func (s *StatsService) Overview(ctx context.Context) (*model.StatsOverview, erro
 		Trend14:          trend,
 		Peak:             peak,
 		TopSeats:         top,
-	}, nil
+	}
+	if s.cache != nil {
+		_ = s.cache.Set(ctx, cacheKey, resp, 3*time.Minute)
+	}
+	return resp, nil
 }

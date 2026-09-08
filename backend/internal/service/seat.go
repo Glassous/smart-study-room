@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/imicola/smart-study-room/backend/internal/model"
+	"github.com/imicola/smart-study-room/backend/internal/pkg/rediscache"
 	"github.com/imicola/smart-study-room/backend/internal/repository"
 )
 
@@ -25,15 +26,32 @@ var timeRe = regexp.MustCompile(`^\d{2}:\d{2}:\d{2}$|^\d{2}:\d{2}$`)
 type SeatService struct {
 	rooms *repository.RoomRepo
 	seats *repository.SeatRepo
+	cache *rediscache.Helper
 }
 
 func NewSeatService(rooms *repository.RoomRepo, seats *repository.SeatRepo) *SeatService {
 	return &SeatService{rooms: rooms, seats: seats}
 }
 
-// ListRooms 房间列表
+// SetCache 设置缓存辅助器
+func (s *SeatService) SetCache(cache *rediscache.Helper) {
+	s.cache = cache
+}
+
+// ListRooms 房间列表 (优先走 Redis 缓存)
 func (s *SeatService) ListRooms(ctx context.Context) ([]*model.Room, error) {
-	return s.rooms.List(ctx)
+	if s.cache != nil {
+		var cached []*model.Room
+		hit, err := s.cache.Get(ctx, "studyroom:cache:rooms", &cached)
+		if err == nil && hit {
+			return cached, nil
+		}
+	}
+	rooms, err := s.rooms.List(ctx)
+	if err == nil && s.cache != nil {
+		_ = s.cache.Set(ctx, "studyroom:cache:rooms", rooms, 1*time.Hour)
+	}
+	return rooms, err
 }
 
 // GetRoom 房间详情
@@ -77,6 +95,10 @@ func (s *SeatService) CreateRoom(ctx context.Context, req *model.RoomUpsertReque
 	if err := s.rooms.Create(ctx, room); err != nil {
 		return nil, err
 	}
+	if s.cache != nil {
+		_ = s.cache.Del(ctx, "studyroom:cache:rooms")
+		_ = s.cache.InvalidateStats(ctx)
+	}
 	return room, nil
 }
 
@@ -96,6 +118,10 @@ func (s *SeatService) UpdateRoom(ctx context.Context, id int64, req *model.RoomU
 		}
 		return nil, err
 	}
+	if s.cache != nil {
+		_ = s.cache.Del(ctx, "studyroom:cache:rooms")
+		_ = s.cache.InvalidateStats(ctx)
+	}
 	return s.GetRoom(ctx, id)
 }
 
@@ -104,6 +130,10 @@ func (s *SeatService) DeleteRoom(ctx context.Context, id int64) error {
 	err := s.rooms.Delete(ctx, id)
 	if errors.Is(err, repository.ErrNotFound) {
 		return ErrRoomNotFound
+	}
+	if err == nil && s.cache != nil {
+		_ = s.cache.Del(ctx, "studyroom:cache:rooms")
+		_ = s.cache.InvalidateStats(ctx)
 	}
 	return err
 }
@@ -156,6 +186,9 @@ func (s *SeatService) BatchGenSeats(ctx context.Context, roomID int64, rows, col
 	if err := s.seats.BatchCreate(ctx, roomID, seats); err != nil {
 		return 0, err
 	}
+	if s.cache != nil {
+		_ = s.cache.InvalidateStats(ctx)
+	}
 	return len(seats), nil
 }
 
@@ -165,6 +198,9 @@ func (s *SeatService) UpdateSeat(ctx context.Context, id int64, req *model.SeatU
 	if errors.Is(err, repository.ErrNotFound) {
 		return ErrSeatNotFound
 	}
+	if err == nil && s.cache != nil {
+		_ = s.cache.InvalidateStats(ctx)
+	}
 	return err
 }
 
@@ -173,6 +209,9 @@ func (s *SeatService) DeleteSeat(ctx context.Context, id int64) error {
 	err := s.seats.Delete(ctx, id)
 	if errors.Is(err, repository.ErrNotFound) {
 		return ErrSeatNotFound
+	}
+	if err == nil && s.cache != nil {
+		_ = s.cache.InvalidateStats(ctx)
 	}
 	return err
 }

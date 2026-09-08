@@ -172,9 +172,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   will-change: transform, opacity;
 }
 .topbar-action,
-.quick-menu-shell {
+.quick-menu-shell:not(.expanded) {
   border: 0;
-  background: var(--app-canvas-background);
+  background: transparent;
   color: #35465e;
   box-shadow: none;
 }
@@ -193,9 +193,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   transition: color .16s ease, background .16s ease;
 }
 .topbar-action:hover,
-.quick-menu-shell:not(.expanded):hover {
+.quick-menu-shell:not(.expanded):hover,
+.quick-menu-trigger:hover {
   color: #203149;
-  background: rgba(255, 255, 255, .48);
+  background: rgba(0, 0, 0, .05);
 }
 .topbar-action:focus-visible,
 .quick-menu-trigger:focus-visible,
@@ -248,7 +249,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   display: grid;
   place-items: center;
   color: inherit;
-  background: var(--app-canvas-background);
+  background: transparent;
   cursor: pointer;
 }
 .quick-menu-content {

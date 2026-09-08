@@ -33,6 +33,7 @@ services:
       # 只读挂载 schema 迁移与种子数据，按文件名序执行(001 → 002)
       - ./backend/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
       - ./backend/seed/seed.sql:/docker-entrypoint-initdb.d/002_seed.sql:ro
+      - ./backend/migrations/002_ai_assistant.sql:/docker-entrypoint-initdb.d/003_ai_assistant.sql:ro
     healthcheck:
       # $$ 转义: 由容器内环境变量展开，避免 compose 提前插值
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -42,14 +43,44 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: studyroom-redis
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-studyroom_redis_pass}
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lru
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-studyroom_redis_pass}
+    ports:
+      # 宿主 6380 → 容器 6379，避免与本机既有 Redis(6379) 冲突
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-studyroom_redis_pass} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: studyroom-backend
+    # AI 凭据只从后端专用的忽略文件读取，不写入 compose 配置或镜像。
+    env_file:
+      - ./backend/.env
     environment:
       STUDYROOM_PORT: "8080"
       STUDYROOM_DB_URL: postgres://${POSTGRES_USER:-studyroom}:${POSTGRES_PASSWORD:-studyroom}@db:5432/${POSTGRES_DB:-studyroom}?sslmode=disable
+      STUDYROOM_REDIS_ADDR: redis:6379
+      STUDYROOM_REDIS_PASSWORD: ${REDIS_PASSWORD:-studyroom_redis_pass}
+      STUDYROOM_REDIS_DB: "0"
       STUDYROOM_JWT_SECRET: ${STUDYROOM_JWT_SECRET:-studyroom-dev-secret}
     ports:
       # 与前端 Vite 本地代理 http://127.0.0.1:8080 衔接；
@@ -58,7 +89,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   db-data:
+  redis-data:

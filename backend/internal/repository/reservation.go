@@ -153,6 +153,29 @@ func (r *ReservationRepo) HasConflict(ctx context.Context, seatID, userID int64,
 	return seatConflict, userConflict, err
 }
 
+// FindUserReservationInSlot 查找用户在指定时段的有效预约(用于判断是否已在该时段选座)
+func (r *ReservationRepo) FindUserReservationInSlot(ctx context.Context, userID int64, date, start, end string) (*model.Reservation, error) {
+	var res model.Reservation
+	statuses := []string{model.ResPending, model.ResCheckedIn, model.ResTempLeave, model.ResCompleted}
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, user_id, seat_id, res_date::text, start_time::text, end_time::text, status
+		FROM reservations
+		WHERE user_id = $1 AND res_date = $2::date
+		  AND status = ANY($5)
+		  AND tsrange((res_date + start_time)::timestamp, (res_date + end_time)::timestamp)
+		   && tsrange(($2::date + $3::time)::timestamp, ($2::date + $4::time)::timestamp)
+		LIMIT 1`,
+		userID, date, start, end, statuses).
+		Scan(&res.ID, &res.UserID, &res.SeatID, &res.ResDate, &res.StartTime, &res.EndTime, &res.Status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 // UpdateStatus 条件状态迁移(仅当当前状态在 from 集合内才更新), 返回是否生效
 func (r *ReservationRepo) UpdateStatus(ctx context.Context, id int64, from []string, to string, sets map[string]any) (bool, error) {
 	q := `UPDATE reservations SET status = $2, updated_at = now()`
