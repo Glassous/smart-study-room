@@ -2,8 +2,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listNotifications, markRead, markAllRead } from '../api/notification'
+import { useNotificationStore } from '../stores/notification'
 import AppIcon from '../components/AppIcon.vue'
 
+const notifStore = useNotificationStore()
 const list = ref([])
 const loading = ref(false)
 const filterType = ref('all')
@@ -22,6 +24,7 @@ async function load() {
   try {
     const resp = await listNotifications()
     list.value = resp.data || []
+    notifStore.refresh()
   } finally {
     loading.value = false
   }
@@ -31,11 +34,14 @@ async function onMarkRead(n) {
   if (n.is_read) return
   await markRead(n.id)
   n.is_read = true
+  notifStore.decrement(1)
+  notifStore.refresh()
 }
 
 async function onMarkAll() {
   const resp = await markAllRead()
   ElMessage.success(`已标记 ${resp.data.marked} 条为已读`)
+  notifStore.clear()
   load()
 }
 

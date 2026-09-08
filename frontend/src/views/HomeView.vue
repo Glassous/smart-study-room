@@ -2,14 +2,15 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useNotificationStore } from '../stores/notification'
 import { getRooms } from '../api/room'
 import { getOverview } from '../api/stats'
 import { getCreditOverview } from '../api/credit'
-import { unreadCount } from '../api/notification'
 import AppIcon from '../components/AppIcon.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+const notifStore = useNotificationStore()
 
 const who = computed(() => auth.user?.real_name || auth.user?.username || '同学')
 const roleText = computed(() => (auth.isAdmin ? '管理员' : '学生'))
@@ -18,7 +19,7 @@ const helloText = computed(() => auth.isAdmin ? '欢迎回来，请查看今日�
 const rooms = ref([])
 const statsOverview = ref(null)
 const creditOverview = ref(null)
-const unread = ref(0)
+const unread = computed(() => notifStore.unread)
 let unreadTimer = null
 
 const currentCredit = computed(() => creditOverview.value?.score ?? auth.user?.credit_score ?? 100)
@@ -36,14 +37,8 @@ const openHours = computed(() => {
   return { open: '08:00', close: '22:00' }
 })
 
-async function refreshUnread() {
-  if (!auth.isLoggedIn) return
-  try {
-    const resp = await unreadCount()
-    unread.value = resp.data?.count || 0
-  } catch (e) {
-    unread.value = 0
-  }
+function refreshUnread() {
+  notifStore.refresh()
 }
 
 onMounted(async () => {
