@@ -356,17 +356,21 @@ onMounted(loadRooms)
     <div class="split-right">
       <section ref="seatCard" class="card seat-card">
         <div class="card-title-row">
-          <div>
-            <div class="seat-heading"><h3 style="margin:0">座位平面图</h3><SButton :disabled="!room || loading || mapError || !seats.length" aria-label="打开 3D 选座" @click="open3D">3D</SButton></div>
-            <div v-if="room" class="room-meta muted">
-              {{ room.name }} · {{ room.location }} · 开放 {{ room.open_time?.slice(0, 5) }}–{{ room.close_time?.slice(0, 5) }} · {{ room.seat_rows }}×{{ room.seat_cols }}
+          <div class="seat-heading">
+            <h3 style="margin:0">座位平面图</h3>
+            <div class="seat-head-tools">
+              <SSelect v-if="room" v-model="roomId" class="room-select" :options="rooms" label-key="name" value-key="id" aria-label="选择自习室" @change="loadSeatMap" />
+              <div v-if="room" class="room-chip">
+                <span class="room-chip__meta">{{ room.location }} · 开放 {{ room.open_time?.slice(0, 5) }}–{{ room.close_time?.slice(0, 5) }} · {{ room.seat_rows }}×{{ room.seat_cols }}</span>
+              </div>
             </div>
+            <SButton :disabled="!room || loading || mapError || !seats.length" aria-label="打开 3D 选座" @click="open3D">3D</SButton>
           </div>
         </div>
 
         <div class="responsive-scroll" tabindex="0" aria-label="座位平面图，可左右滑动">
         <div v-loading="loading" class="seat-grid-wrap" @mouseover="onGridOver" @mouseleave="onGridLeave">
-          <div v-if="!room" class="empty-tip muted">请先在左侧选择自习室并设置预约条件</div>
+          <div v-if="!room" class="empty-tip muted">请先选择自习室并设置预约条件</div>
           <div v-else :style="frameStyle" class="room-frame">
             <!-- 顶部：窗或墙 -->
             <div class="wall wall-top" :class="{ window: windowSides.top }" aria-hidden="true"></div>
@@ -489,8 +493,42 @@ onMounted(loadRooms)
 </template>
 
 <style scoped>
-.seat-card > .card-title-row > div { width: 100%; }
-.seat-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.seat-card .seat-heading { width: 100%; display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.seat-heading h3 { flex: 0 0 auto; }
+/* 自习室选择器 + 示意卡片：与标题相邻、整体靠左 */
+.seat-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin-inline-end: auto; /* 把右侧空间推给 3D 按钮，本组自身靠左 */
+}
+/* 示意卡片：单行概要 */
+.room-chip {
+  min-width: 0;
+  max-width: min(360px, 46vw);
+  padding: 5px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 #ffffff0a;
+}
+.room-chip__meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-caption);
+  color: var(--text-4);
+  line-height: 1.5;
+}
+.room-select { flex: 0 0 150px; width: 150px; }
+@media (max-width: 720px) {
+  .seat-head-tools { margin-inline-end: 0; }
+  .room-chip { flex: 1 1 auto; max-width: 100%; }
+  .room-select { flex: 0 0 150px; }
+}
 
 
 /* 时段选择并排 */
@@ -591,9 +629,6 @@ onMounted(loadRooms)
 }
 .booking-split > .split-right { align-self: start; }
 .booking-split > .split-right > .seat-card:first-child { flex: 0 0 auto; }
-.room-meta {
-  margin-top: 3px;
-}
 .seat-grid-wrap {
   margin-top: 8px;
   padding: 12px;

@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, useId } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
 import { activeHeaderPanel } from '../composables/headerPanel'
 
 defineProps({ title: String, icon: { type: String, default: 'info' }, width: { type: Number, default: 340 } })
+const emit = defineEmits(['toggle'])
 const id = useId()
 const root = ref(null)
 const trigger = ref(null)
@@ -19,13 +20,14 @@ function close(restore = false) {
 function toggle() { activeHeaderPanel.value = open.value ? null : id }
 function outside(event) { if (!root.value?.contains(event.target)) close() }
 function focusOut(event) { if (event.relatedTarget && !root.value?.contains(event.relatedTarget)) close() }
+watch(open, (val) => emit('toggle', val), { immediate: true })
 onMounted(() => {
   observer = new ResizeObserver(() => { height.value = Math.ceil(content.value.getBoundingClientRect().height) + 2 })
   observer.observe(content.value)
   document.addEventListener('pointerdown', outside)
 })
 onUnmounted(() => { close(); observer?.disconnect(); document.removeEventListener('pointerdown', outside) })
-defineExpose({ close })
+defineExpose({ close, open })
 </script>
 
 <template>

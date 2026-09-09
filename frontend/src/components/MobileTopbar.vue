@@ -14,6 +14,7 @@ const props = defineProps({
 
 const emit = defineEmits(['open-sidebar', 'navigate'])
 const quickMenu = ref(null)
+const isMenuOpen = ref(false)
 
 const quickMenus = computed(() => props.menus.filter((item) => item.index !== props.currentPath))
 
@@ -43,6 +44,7 @@ watch(() => props.sidebarCollapsed, (collapsed) => {
 <template>
   <header
     class="mobile-topbar"
+    :class="{ 'has-expanded-panel': isMenuOpen }"
     :style="{
       '--title-progress': Math.max(0, Math.min(1, titleProgress)),
       '--title-offset': `${(1 - Math.max(0, Math.min(1, titleProgress))) * 10}px`
@@ -66,7 +68,7 @@ watch(() => props.sidebarCollapsed, (collapsed) => {
       {{ pageTitle }}
     </div>
 
-    <HeaderPanel ref="quickMenu" title="快捷导航" icon="more" :width="228">
+    <HeaderPanel ref="quickMenu" title="快捷导航" icon="more" :width="228" @toggle="isMenuOpen = $event">
       <nav class="quick-menu-list">
         <button v-for="item in quickMenus" :key="item.index" type="button" class="quick-menu-item" @click="navigate(item.index)">
           <span class="quick-menu-icon"><AppIcon :name="item.icon" :size="19" /></span>
@@ -91,6 +93,10 @@ watch(() => props.sidebarCollapsed, (collapsed) => {
   border: 0;
   box-shadow: none;
   pointer-events: none;
+}
+.mobile-topbar.has-expanded-panel,
+.mobile-topbar:has(.is-expanded) {
+  z-index: 35;
 }
 .mobile-topbar::before {
   content: '';
