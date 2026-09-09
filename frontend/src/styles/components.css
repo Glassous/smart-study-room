@@ -356,7 +356,7 @@ table.table {
 .pill-success  { background: var(--green-weak);   color: var(--green-strong); }
 .pill-warning  { background: var(--amber-weak);   color: var(--amber-strong); }
 .pill-danger   { background: var(--red-weak);     color: var(--red-strong); }
-.pill-info     { background: #e9edf6;            color: #4a5b76; }
+.pill-info     { background: var(--pill-info-bg); color: var(--pill-info-color); }
 .pill-violet   { background: var(--violet-weak);  color: var(--violet-strong); }
 .pill-neutral  { background: var(--surface-3);    color: var(--text-3); }
 
@@ -487,7 +487,7 @@ table.table {
   overscroll-behavior-inline: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: #bdc7d5 transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .responsive-scroll::-webkit-scrollbar {
@@ -496,7 +496,11 @@ table.table {
 
 .responsive-scroll::-webkit-scrollbar-thumb {
   border-radius: var(--r-full);
-  background: #bdc7d5;
+  background: var(--scrollbar-thumb);
+}
+
+.responsive-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 .responsive-scroll::-webkit-scrollbar-track {
@@ -514,7 +518,7 @@ table.table {
   z-index: 10;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, .68);
+  background: var(--loading-mask);
   backdrop-filter: blur(1px);
   border-radius: inherit;
   animation: v-loading-in var(--dur-2) var(--ease);

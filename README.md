@@ -105,6 +105,8 @@ STUDYROOM_AI_MODEL=gpt-4o-mini
 
 兼容服务需支持 SSE 流式输出及 tools/function calling。可选配置包括连接超时、响应超时和历史上下文条数，详见 `.env.example`。未配置 AI 时其他预约功能照常运行。
 
+> AI 等环境变量统一填写在仓库根目录的 `.env`（模板见根目录 `.env.example`）。Docker 部署时由 `docker-compose.yml` 将其注入后端容器；本地直跑（`cd backend && go run ./cmd/server`）同样读取该文件。`backend/` 目录下不再需要、也不再维护单独的 `.env`。
+
 AI 会话保存在 PostgreSQL 的 `ai_conversations`、`ai_messages` 表中。部署升级时需执行 `./scripts/apply_migrations.sh` 以应用 `002_ai_assistant.sql`。
 
 ## 项目结构

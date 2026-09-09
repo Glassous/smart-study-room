@@ -6,6 +6,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { message } from '../components/ui/feedback'
 import { useAuthStore } from '../stores/auth'
 import { useNotificationStore } from '../stores/notification'
+import { useThemeStore } from '../stores/theme'
 import { logout as logoutApi } from '../api/auth'
 import AppIcon from '../components/AppIcon.vue'
 import MobileTopbar from '../components/MobileTopbar.vue'
@@ -16,6 +17,7 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const notifStore = useNotificationStore()
+const themeStore = useThemeStore()
 const narrowMediaQuery = window.matchMedia('(max-width: 1024px)')
 const isNarrowScreen = ref(narrowMediaQuery.matches)
 const isSidebarCollapsed = ref(narrowMediaQuery.matches)
@@ -25,48 +27,6 @@ const mobilePageTitle = ref('')
 const contentRef = ref(null)
 const isDesktopCollapsed = computed(() => !isNarrowScreen.value && isSidebarCollapsed.value)
 let titleMedia = null
-
-// 用户菜单弹出层（Teleport 到 body，避免被侧栏 overflow 裁剪）
-const userMenuOpen = ref(false)
-const userAreaRef = ref(null)
-const userMenuStyle = ref({})
-
-function updateUserMenuPosition() {
-  const el = userAreaRef.value
-  if (!el) return
-  const rect = el.getBoundingClientRect()
-  const collapsed = isDesktopCollapsed.value
-  if (collapsed) {
-    userMenuStyle.value = {
-      position: 'fixed',
-      left: `${Math.round(rect.right + 10)}px`,
-      bottom: `${Math.round(window.innerHeight - rect.bottom)}px`,
-      width: '150px'
-    }
-  } else {
-    userMenuStyle.value = {
-      position: 'fixed',
-      left: `${Math.round(rect.left)}px`,
-      bottom: `${Math.round(window.innerHeight - rect.top + 8)}px`,
-      width: `${Math.round(rect.width)}px`
-    }
-  }
-}
-
-function toggleUserMenu() {
-  userMenuOpen.value = !userMenuOpen.value
-  if (userMenuOpen.value) updateUserMenuPosition()
-}
-
-function onDocPointerDown(e) {
-  if (userMenuOpen.value && !userAreaRef.value?.contains(e.target) && !e.target.closest('.user-menu')) {
-    userMenuOpen.value = false
-  }
-}
-
-function onUiReposition() {
-  if (userMenuOpen.value) updateUserMenuPosition()
-}
 
 // 未读消息角标(通过 Pinia Store 集中管理与 60s 轮询)
 const unread = computed(() => notifStore.unread)
@@ -96,7 +56,6 @@ const menus = computed(() => {
 })
 
 async function handleSelect(index) {
-  userMenuOpen.value = false
   if (route.path !== index) await router.push(index)
   if (isNarrowScreen.value) closeSidebar()
 }
@@ -107,15 +66,6 @@ function onLogout() {
   auth.logout()
   message.success('已退出登录')
   router.push('/login')
-}
-
-function handleAccountCommand(command) {
-  userMenuOpen.value = false
-  if (command === 'profile') {
-    router.push('/profile')
-    if (isNarrowScreen.value) closeSidebar()
-  }
-  if (command === 'logout') onLogout()
 }
 
 function openSidebar() {
@@ -218,7 +168,6 @@ function setupMobileTitleAnimation() {
 watch(() => route.fullPath, async () => {
   cleanupMobileTitleAnimation()
   mobilePageTitle.value = ''
-  userMenuOpen.value = false
   if (contentRef.value) contentRef.value.scrollTop = 0
   await nextTick()
   setupMobileTitleAnimation()
@@ -227,9 +176,6 @@ watch(() => route.fullPath, async () => {
 onMounted(() => {
   narrowMediaQuery.addEventListener('change', onNarrowChange)
   window.addEventListener('keydown', onKeydown)
-  window.addEventListener('scroll', onUiReposition, true)
-  window.addEventListener('resize', onUiReposition)
-  document.addEventListener('pointerdown', onDocPointerDown)
   if (auth.isStudent) {
     refreshUnread()
     timer = setInterval(refreshUnread, 60000)
@@ -240,9 +186,6 @@ onUnmounted(() => {
   cleanupMobileTitleAnimation()
   narrowMediaQuery.removeEventListener('change', onNarrowChange)
   window.removeEventListener('keydown', onKeydown)
-  window.removeEventListener('scroll', onUiReposition, true)
-  window.removeEventListener('resize', onUiReposition)
-  document.removeEventListener('pointerdown', onDocPointerDown)
   if (timer) clearInterval(timer)
 })
 </script>
@@ -280,12 +223,9 @@ onUnmounted(() => {
 
     <!-- ============== 左栏（导航 / 品牌 / 用户） ============== -->
     <aside class="sidebar" :class="{ collapsed: isSidebarCollapsed }">
-      <!-- 品牌（折叠/展开按钮固定在品牌行右侧，位置不随折叠状态改变） -->
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">
-          <AppIcon name="book" :size="18" />
-        </div>
-        <div v-show="!isDesktopCollapsed" class="brand-copy">
+      <!-- 品牌（保留智能自习室与副标题；折叠按钮展开态居右、折叠态居左，纵向高度恒定） -->
+      <div class="brand" :class="{ collapsed: isDesktopCollapsed }">
+        <div class="brand-copy">
           <div class="brand-name">智能自习室</div>
           <div class="brand-sub">Smart Study Room</div>
         </div>
@@ -297,11 +237,11 @@ onUnmounted(() => {
           :aria-expanded="!isSidebarCollapsed"
           @click="toggleSidebar"
         >
-          <AppIcon :name="isDesktopCollapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="18" />
+          <AppIcon :name="isDesktopCollapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="24" />
         </button>
       </div>
 
-      <!-- 菜单 -->
+      <!-- 菜单（加大尺寸） -->
       <nav class="menu" aria-label="主导航">
         <button
           v-for="m in menus"
@@ -312,7 +252,7 @@ onUnmounted(() => {
           :aria-label="m.title"
           @click="handleSelect(m.index)"
         >
-          <span class="menu-icon"><AppIcon :name="m.icon" :size="19" /></span>
+          <span class="menu-icon"><AppIcon :name="m.icon" :size="21" /></span>
           <span class="menu-text">{{ m.title }}</span>
           <SBadge
             v-if="m.index === '/notifications' && unread > 0"
@@ -325,32 +265,75 @@ onUnmounted(() => {
 
       <div class="sidebar-spacer" />
 
-      <!-- 底部：账户入口 -->
-      <div v-if="auth.isLoggedIn" ref="userAreaRef" class="sidebar-footer">
-        <button
-          class="user-card"
-          :class="{ open: userMenuOpen }"
-          :title="isDesktopCollapsed ? (auth.user?.real_name || auth.user?.username) : undefined"
-          :aria-expanded="userMenuOpen"
-          @click="toggleUserMenu"
-        >
-          <div class="avatar-slot">
+      <!-- 主题模式切换（折叠后整体隐藏） -->
+      <div class="sidebar-theme" :class="{ collapsed: isDesktopCollapsed }">
+        <div class="theme-switch-group" role="radiogroup" aria-label="主题模式选择">
+          <button
+            type="button"
+            class="theme-btn"
+            :class="{ active: themeStore.mode === 'system' }"
+            :aria-checked="themeStore.mode === 'system'"
+            role="radio"
+            title="跟随系统"
+            @click="themeStore.setMode('system')"
+          >
+            <AppIcon name="system" :size="15" />
+            <span>系统</span>
+          </button>
+          <button
+            type="button"
+            class="theme-btn"
+            :class="{ active: themeStore.mode === 'light' }"
+            :aria-checked="themeStore.mode === 'light'"
+            role="radio"
+            title="浅色模式"
+            @click="themeStore.setMode('light')"
+          >
+            <AppIcon name="sun" :size="15" />
+            <span>浅色</span>
+          </button>
+          <button
+            type="button"
+            class="theme-btn"
+            :class="{ active: themeStore.mode === 'dark' }"
+            :aria-checked="themeStore.mode === 'dark'"
+            role="radio"
+            title="深色模式"
+            @click="themeStore.setMode('dark')"
+          >
+            <AppIcon name="moon" :size="15" />
+            <span>深色</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 底部：个人区域（折叠后仅显示头像，展开显示头像+信息+退出登录） -->
+      <div v-if="auth.isLoggedIn" class="sidebar-footer">
+        <div class="user-row">
+          <div class="avatar-slot" :title="auth.user?.real_name || auth.user?.username">
             <div class="avatar">
               {{ (auth.user?.real_name || auth.user?.username || '?').slice(0, 1) }}
             </div>
           </div>
           <div v-show="!isDesktopCollapsed" class="user-meta">
-            <div class="user-name">
+            <div class="user-name" :title="auth.user?.real_name || auth.user?.username">
               {{ auth.user?.real_name || auth.user?.username }}
             </div>
             <span class="role-pill" :class="auth.isAdmin ? 'role-pill--admin' : 'role-pill--student'">
               {{ auth.isAdmin ? '管理员' : '学生' }}
             </span>
           </div>
-          <span v-show="!isDesktopCollapsed" class="user-chev" :class="{ open: userMenuOpen }" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4" /></svg>
-          </span>
-        </button>
+          <button
+            v-show="!isDesktopCollapsed"
+            type="button"
+            class="sidebar-logout-btn"
+            title="退出登录"
+            aria-label="退出登录"
+            @click="onLogout"
+          >
+            <AppIcon name="logout" :size="16" />
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -362,22 +345,6 @@ onUnmounted(() => {
       </main>
     </section>
     <AIAssistant v-if="auth.isLoggedIn && auth.isStudent" />
-
-    <!-- 用户弹出菜单（Teleport 避免侧栏 overflow 裁剪） -->
-    <Teleport to="body">
-      <Transition name="user-menu">
-        <div v-if="userMenuOpen && auth.isLoggedIn" class="user-menu" :style="userMenuStyle" role="menu">
-          <button class="user-menu-item" role="menuitem" @click="handleAccountCommand('profile')">
-            <AppIcon name="profile" :size="16" />个人中心
-          </button>
-          <div class="user-menu-divider" />
-          <button class="user-menu-item user-menu-item--danger" role="menuitem" @click="handleAccountCommand('logout')">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H15M10 8l-4 4 4 4M6 12h10" transform="rotate(180 12 12)" /></svg>
-            退出登录
-          </button>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
@@ -407,73 +374,74 @@ onUnmounted(() => {
   flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 18px 12px 12px;
+  padding: 16px 12px 12px;
   min-height: 0;
   overflow: hidden;
-}
-
-/* 折叠态：收窄内边距以容纳 logo + 固定位置的折叠按钮 */
-.shell:not(.narrow-screen) .sidebar.collapsed {
-  padding: 18px 4px 12px;
+  box-sizing: border-box;
 }
 
 .brand {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px 6px 14px 8px;
-  min-height: 50px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
   white-space: nowrap;
-}
-.shell:not(.narrow-screen) .sidebar.collapsed .brand {
-  padding: 2px 4px 14px;
-  gap: 0;
-}
-.brand-mark {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  border-radius: var(--r-lg);
-  background: var(--primary);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 2px 6px rgba(59, 102, 218, .3);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .brand-copy {
   min-width: 0;
   flex: 1;
+  overflow: hidden;
+  padding-left: 4px;
+  padding-right: 52px;
+  transition: opacity var(--dur-2) var(--ease);
+}
+.brand.collapsed .brand-copy {
+  opacity: 0;
+  pointer-events: none;
 }
 .brand-name {
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text-1);
   letter-spacing: -.01em;
+  white-space: nowrap;
 }
 .brand-sub {
   font-size: 10px;
   color: var(--text-4);
-  margin-top: 1px;
-  letter-spacing: .07em;
+  margin-top: 2px;
+  letter-spacing: .08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .sidebar-toggle {
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-4);
-  width: 30px;
-  height: 30px;
+  color: var(--text-3);
+  position: absolute;
+  right: 0;
+  top: 10px;
+  width: 48px;
+  height: 36px;
   padding: 0;
   border-radius: var(--r-md);
   display: grid;
   place-items: center;
-  flex: 0 0 30px;
+  cursor: pointer;
+  box-sizing: border-box;
   transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
 }
+.brand.collapsed .sidebar-toggle {
+  right: auto;
+  left: 0;
+}
 .sidebar-toggle:hover {
-  color: var(--text-2);
+  color: var(--text-1);
   background: var(--surface-3);
 }
 .sidebar-toggle:focus-visible {
@@ -481,14 +449,14 @@ onUnmounted(() => {
   outline-offset: 1px;
 }
 
-/* 菜单 */
+/* 菜单（加大尺寸） */
 .menu {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 6px 0;
   scrollbar-width: none;
 }
 .menu::-webkit-scrollbar {
@@ -500,16 +468,18 @@ onUnmounted(() => {
   align-items: center;
   gap: 0;
   padding: 0;
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   cursor: pointer;
   color: var(--text-2);
-  font-size: var(--fs-body-sm);
+  font-size: 14.5px;
   font-weight: 500;
   transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
   position: relative;
   width: 100%;
-  min-height: 38px;
+  min-height: 44px;
+  height: 44px;
   box-sizing: border-box;
+  overflow: hidden;
 }
 .menu-item:hover {
   background: var(--surface-hover);
@@ -524,21 +494,20 @@ onUnmounted(() => {
   content: '';
   position: absolute;
   left: -12px;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
+  top: 9px;
+  bottom: 9px;
+  width: 3.5px;
   border-radius: 0 3px 3px 0;
   background: var(--primary);
 }
-.shell:not(.narrow-screen) .sidebar.collapsed .menu-item.active::before {
-  left: -4px;
-}
 .menu-icon {
-  width: 42px;
-  height: 20px;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  height: 44px;
   display: grid;
   place-items: center;
-  flex: 0 0 42px;
+  flex: 0 0 48px;
   color: var(--text-4);
   transition: color var(--dur-1) var(--ease);
 }
@@ -551,34 +520,33 @@ onUnmounted(() => {
 .menu-text {
   flex: 1;
   min-width: 0;
-  height: 20px;
+  height: 24px;
   display: flex;
   align-items: center;
-  line-height: 20px;
+  line-height: 24px;
   white-space: nowrap;
   overflow: hidden;
+  padding-left: 2px;
+  transition: opacity var(--dur-2) var(--ease);
 }
 .menu-badge {
-  margin-right: 8px;
-}
-.shell:not(.narrow-screen) .sidebar.collapsed .menu-item {
-  justify-content: center;
-}
-.shell:not(.narrow-screen) .sidebar.collapsed .menu-icon {
+  margin-left: auto;
+  margin-right: 10px;
   flex: 0 0 auto;
-  width: auto;
 }
+/* 折叠态文字渐隐，图标保持原地不动 */
 .shell:not(.narrow-screen) .sidebar.collapsed .menu-text {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
-/* 折叠态徽标锚定在图标右上角，避免孤悬 */
+/* 折叠态徽标锚定在图标右上角，绝对定位，不影响图标流 */
 .shell:not(.narrow-screen) .sidebar.collapsed .menu-badge {
   position: absolute;
-  top: 1px;
-  left: calc(50% + 8px);
+  top: 4px;
+  left: 30px;
   right: auto;
   margin: 0;
-  transform: scale(.86);
+  transform: scale(.82);
   transform-origin: top left;
 }
 
@@ -587,42 +555,100 @@ onUnmounted(() => {
   min-height: 8px;
 }
 
-/* 底部用户卡 */
-.sidebar-footer {
-  padding-top: 10px;
+/* 主题模式切换（折叠后整体隐藏，高度平滑收缩避免弹跳） */
+.sidebar-theme {
+  display: flex;
+  height: 40px;
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: height var(--dur-3) var(--ease), opacity var(--dur-2) var(--ease);
 }
 
-.user-card {
+.sidebar-theme.collapsed {
+  height: 0;
+  opacity: 0;
+}
+
+.theme-switch-group {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.theme-btn {
   all: unset;
+  flex: 1;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+}
+
+.theme-btn:hover:not(.active) {
+  color: var(--text-1);
+}
+
+.theme-btn.active {
+  background: var(--surface);
+  color: var(--text-1);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+
+.theme-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+/* 底部用户卡 */
+.sidebar-footer {
+  padding-top: 6px;
+  margin-top: 4px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.user-row {
   display: flex;
   align-items: center;
   gap: 0;
+  padding: 4px 0;
+  min-height: 48px;
   width: 100%;
-  min-height: 56px;
-  padding: 8px 0;
-  border-radius: var(--r-lg);
-  background: transparent;
-  cursor: pointer;
   box-sizing: border-box;
-  transition: background var(--dur-1) var(--ease);
+  overflow: hidden;
 }
-.user-card:hover,
-.user-card.open {
-  background: var(--surface-hover);
-}
-.user-card:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
-}
+
 .avatar-slot {
-  width: 44px;
-  flex: 0 0 44px;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  height: 44px;
+  flex: 0 0 48px;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
 }
+
 .avatar {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--r-md);
   background: var(--primary-weak);
   color: var(--primary-active);
@@ -630,104 +656,80 @@ onUnmounted(() => {
   place-items: center;
   font-weight: 700;
   font-size: 14px;
+  user-select: none;
 }
-.shell:not(.narrow-screen) .sidebar.collapsed .avatar-slot {
-  width: 100%;
-  flex: 0 0 auto;
-}
+
 .user-meta {
   flex: 1;
   min-width: 0;
+  height: 36px;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   align-items: flex-start;
-  gap: 3px;
-  padding-left: 2px;
+  gap: 0;
+  padding-left: 6px;
+  overflow: hidden;
+  transition: opacity var(--dur-2) var(--ease);
 }
+
 .user-name {
   font-size: 13px;
   font-weight: 600;
+  line-height: 16px;
   color: var(--text-1);
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .role-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 0 8px;
   border-radius: var(--r-full);
 }
+
 .role-pill--student {
   background: var(--primary-weak);
   color: var(--primary-active);
 }
+
 .role-pill--admin {
   background: var(--red-weak);
   color: var(--red-strong);
 }
-.user-chev {
-  color: var(--text-4);
-  flex: 0 0 auto;
-  margin-right: 10px;
+
+.sidebar-logout-btn {
+  all: unset;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
   display: grid;
   place-items: center;
-  transition: transform var(--dur-2) var(--ease);
-}
-.user-chev.open {
-  transform: rotate(180deg);
+  color: var(--text-3);
+  cursor: pointer;
+  flex: 0 0 32px;
+  margin-left: auto;
+  margin-right: 4px;
+  box-sizing: border-box;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
 }
 
-/* 用户弹出菜单（Teleport 到 body，fixed 定位由 JS 计算） */
-.user-menu {
-  z-index: calc(var(--z-sidebar) + 10);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-3);
-  padding: 5px;
-  box-sizing: border-box;
-}
-.user-menu-item {
-  all: unset;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-  font-size: var(--fs-body-sm);
-  color: var(--text-2);
-  cursor: pointer;
-  box-sizing: border-box;
-  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
-}
-.user-menu-item:hover {
-  background: var(--surface-hover);
-  color: var(--text-1);
-}
-.user-menu-item--danger {
-  color: var(--red-strong);
-}
-.user-menu-item--danger:hover {
+.sidebar-logout-btn:hover {
   background: var(--red-weak);
   color: var(--red-strong);
+  transform: translateX(1px);
 }
-.user-menu-divider {
-  height: 1px;
-  background: var(--hairline);
-  margin: 4px 6px;
-}
-.user-menu-enter-active,
-.user-menu-leave-active {
-  transition: opacity var(--dur-1) var(--ease), transform var(--dur-2) var(--ease-out);
-}
-.user-menu-enter-from,
-.user-menu-leave-to {
-  opacity: 0;
-  transform: translateY(6px);
+
+.sidebar-logout-btn:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 1px;
 }
 
 /* ============== 右栏 Content ============== */

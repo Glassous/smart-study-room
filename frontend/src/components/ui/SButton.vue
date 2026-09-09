@@ -139,7 +139,7 @@ const isDisabled = computed(() => props.disabled || props.loading)
   color: var(--text-2);
 }
 .s-btn--soft:hover:not(:disabled) {
-  background: #e7ecf4;
+  background: var(--btn-soft-hover);
   color: var(--text-1);
 }
 
@@ -148,7 +148,7 @@ const isDisabled = computed(() => props.disabled || props.loading)
   color: var(--green-strong);
 }
 .s-btn--soft-success:hover:not(:disabled) {
-  background: #d3eedf;
+  background: var(--btn-soft-success-hover);
 }
 
 .s-btn--soft-danger {
@@ -156,7 +156,7 @@ const isDisabled = computed(() => props.disabled || props.loading)
   color: var(--red-strong);
 }
 .s-btn--soft-danger:hover:not(:disabled) {
-  background: #f6dcda;
+  background: var(--btn-soft-danger-hover);
 }
 
 .s-btn--soft-warn {
@@ -164,7 +164,7 @@ const isDisabled = computed(() => props.disabled || props.loading)
   color: var(--amber-strong);
 }
 .s-btn--soft-warn:hover:not(:disabled) {
-  background: #f6e5c4;
+  background: var(--btn-soft-warn-hover);
 }
 
 /* 幽灵按钮 */

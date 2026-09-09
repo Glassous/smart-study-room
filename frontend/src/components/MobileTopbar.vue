@@ -66,7 +66,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       title="展开侧栏"
       @click="openSidebar"
     >
-      <AppIcon name="sidebar-expand" :size="21" />
+      <AppIcon name="sidebar-expand" :size="24" />
     </button>
     <span v-else class="topbar-placeholder" />
 
@@ -90,12 +90,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       <button
         type="button"
         class="quick-menu-trigger"
+        :class="{ active: isQuickMenuOpen }"
         :aria-label="isQuickMenuOpen ? '收起快捷导航' : '展开快捷导航'"
         :title="isQuickMenuOpen ? '收起快捷导航' : '更多'"
         :aria-expanded="isQuickMenuOpen"
         @click="toggleQuickMenu"
       >
-        <AppIcon name="more" :size="21" />
+        <span class="quick-menu-trigger-icon">
+          <AppIcon name="more" :size="21" />
+        </span>
       </button>
 
       <div class="quick-menu-content" :aria-hidden="!isQuickMenuOpen">
@@ -252,6 +255,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   color: inherit;
   background: transparent;
   cursor: pointer;
+}
+.quick-menu-trigger-icon {
+  display: grid;
+  place-items: center;
+  transform: rotate(-90deg);
+  transition: transform .26s cubic-bezier(0.34, 1.3, 0.64, 1);
+  will-change: transform;
+}
+.quick-menu-trigger.active .quick-menu-trigger-icon {
+  transform: rotate(0deg);
 }
 .quick-menu-content {
   height: 100%;

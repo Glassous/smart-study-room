@@ -360,7 +360,7 @@ const cardToneClass = {
 .shortcut:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-2);
-  border-color: #d4dded;
+  border-color: var(--border-strong);
 }
 
 .shortcut:focus-visible {

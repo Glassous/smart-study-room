@@ -34,10 +34,11 @@ type Config struct {
 }
 
 func Load() *Config {
-	// 支持从仓库根目录执行 go run ./backend/cmd/server，也支持先 cd backend 再启动。
-	// backend/.env 优先于根目录 .env；已注入的系统环境变量始终具有最高优先级。
-	loadDotEnv("backend/.env")
+	// 环境变量统一在仓库根目录的 .env 中维护，避免分散填写。
+	// 既支持在仓库根目录执行 go run ./backend/cmd/server，也支持先 cd backend 再启动
+	// (此时回退读取上级目录的 .env)；已注入的系统环境变量始终具有最高优先级。
 	loadDotEnv(".env")
+	loadDotEnv("../.env")
 	return &Config{
 		Port:              getenv("STUDYROOM_PORT", "8080"),
 		DBUrl:             getenv("STUDYROOM_DB_URL", "host=/tmp port=5432 dbname=studyroom"),
@@ -55,7 +56,7 @@ func Load() *Config {
 	}
 }
 
-// loadDotEnv 读取后端目录的本地 .env。已有系统环境变量优先，避免覆盖 Docker/部署配置。
+// loadDotEnv 读取指定路径的 .env 文件。已有系统环境变量优先，避免覆盖 Docker/部署配置。
 // 仅支持 KEY=VALUE、空行和 # 注释，满足本项目的运行配置需要且不引入额外依赖。
 func loadDotEnv(path string) {
 	f, err := os.Open(path)

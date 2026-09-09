@@ -9,10 +9,10 @@ backend/bin/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.npm-cache/
 
 # 环境与日志
 .env
-backend/.env
 *.log
 logs/
 
