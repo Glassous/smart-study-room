@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { getWindowSides, seatState, stateColors } from './seatPresentation'
+import { getWindowSides, seatState, stateColors, seatPosition } from './seatPresentation'
 
 // Model parts are batched by material. Every instance retains its seat identity.
 export function buildRoom(room, seats, dark) {
@@ -41,8 +41,7 @@ export function buildRoom(room, seats, dark) {
     if (seat.has_power) socket(x, z, seat)
   }
   for (const seat of seats) {
-    const x = (seat.col_no - (room.seat_cols + 1) / 2) * 1.8
-    const z = (seat.row_no - (room.seat_rows + 1) / 2) * 1.9
+    const { x, z } = seatPosition(room, seat)
     if (seat.zone === 'computer') computerDesk(x, z, seat)
     else if (seat.has_power) powerDesk(x, z, seat)
     else ordinaryDesk(x, z, seat)
@@ -138,10 +137,10 @@ export function buildRoom(room, seats, dark) {
   }
   updateSelection(null)
   return { root, pickables, width, depth, updateSelection,
-    updateWalls(camera) {
+    updateWalls(camera, firstPerson = false) {
       for (const wall of walls) {
         const { side, mesh } = wall
-        const facing = side === 'top' ? camera.position.z < -depth / 2 : side === 'bottom' ? camera.position.z > depth / 2 : side === 'left' ? camera.position.x < -width / 2 : camera.position.x > width / 2
+        const facing = !firstPerson && (side === 'top' ? camera.position.z < -depth / 2 : side === 'bottom' ? camera.position.z > depth / 2 : side === 'left' ? camera.position.x < -width / 2 : camera.position.x > width / 2)
         mesh.visible = wall.window || !facing
         // Keep the window silhouette when it is in front, without hiding nearby seats.
         if (wall.window && wall.faded !== facing) {

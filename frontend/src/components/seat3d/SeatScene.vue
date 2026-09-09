@@ -4,14 +4,17 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { gsap } from 'gsap'
 import { buildRoom } from './models'
-import { seatType, seatState, stateLabels, zoneName } from './seatPresentation'
+import { seatType, seatState, stateLabels, zoneName, seatPosition } from './seatPresentation'
 import { useThemeStore } from '../../stores/theme'
 
 const props = defineProps({ room: Object, seats: Array, selectedId: Number, view: String, blocked: Boolean })
-const emit = defineEmits(['select', 'error', 'ready', 'manual-view'])
+const emit = defineEmits(['select', 'error', 'ready', 'manual-view', 'exit-first-person'])
 const host = ref(null)
 const tip = ref(null)
 const theme = useThemeStore()
+const transitioning = ref(false)
+let seated = false, yaw = 0, pitch = -.12, fadeTween
+const lookDirection = new THREE.Vector3()
 let renderer, scene, camera, controls, model, observer, frame = 0, cameraTween, targetTween
 let down = null, disposed = false, pointerCount = 0
 const ray = new THREE.Raycaster()
@@ -22,7 +25,8 @@ function invalidate() {
   frame = requestAnimationFrame(() => {
     frame = 0
     if (!renderer || !model) return
-    controls.update(); model.updateWalls(camera); renderer.render(scene, camera)
+    if (!seated) controls.update()
+    model.updateWalls(camera, seated); renderer.render(scene, camera)
   })
 }
 function resize() {
@@ -33,7 +37,14 @@ function resize() {
 }
 function setView(view = 'overview', animate = true) {
   if (!model) return
+  if (view === 'firstPerson') { enterSeat(animate); return }
+  if (seated) { fadeSwitch(() => { seated = false; setView(view, false) }, animate); return }
+  if (transitioning.value && animate) {
+    fadeTween?.kill(); transitioning.value = false
+    gsap.set(renderer.domElement, { opacity: 1 })
+  }
   cameraTween?.kill(); targetTween?.kill()
+  camera.fov = 38; camera.near = .1; camera.updateProjectionMatrix()
   const halfFov = THREE.MathUtils.degToRad(camera.fov / 2)
   const span = Math.hypot(model.width, model.depth)
   const distance = span / (2 * Math.tan(halfFov) * Math.min(1, camera.aspect)) * 1.14
@@ -46,6 +57,48 @@ function setView(view = 'overview', animate = true) {
   cameraTween = gsap.to(camera.position, { x: destination.x, y: destination.y, z: destination.z, duration, ease: 'power2.inOut', onUpdate: invalidate, onComplete: () => { controls.enabled = !props.blocked; invalidate() } })
   targetTween = gsap.to(controls.target, { x: 0, y: 0, z: 0, duration, ease: 'power2.inOut', onUpdate: invalidate })
 }
+function applyLook() {
+  pitch = THREE.MathUtils.clamp(pitch, -Math.PI * 65 / 180, Math.PI / 3)
+  yaw %= Math.PI * 2
+  lookDirection.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch))
+  camera.lookAt(lookDirection.add(camera.position)); invalidate()
+}
+function syncControls() { if (controls) controls.enabled = !props.blocked && !seated && !transitioning.value }
+function fadeSwitch(change, animate = true) {
+  fadeTween?.kill(); cameraTween?.kill(); targetTween?.kill(); cancel()
+  transitioning.value = true; syncControls()
+  const duration = animate && !reduced() ? .18 : 0
+  fadeTween = gsap.timeline({ onComplete: () => { transitioning.value = false; syncControls() } })
+    .to(renderer.domElement, { opacity: 0, duration })
+    .call(() => { change(); model.updateWalls(camera, seated); renderer.render(scene, camera) })
+    .to(renderer.domElement, { opacity: 1, duration })
+}
+function enterSeat(animate = true) {
+  const seat = props.seats.find(s => s.id === props.selectedId && s.status === 'available' && !s.occupied)
+  if (!seat) { emit('exit-first-person'); return }
+  fadeSwitch(() => {
+    seated = true
+    const { x, z } = seatPosition(props.room, seat)
+    camera.position.set(x, 1.2, z + .69)
+    camera.fov = 65; camera.near = .025; camera.updateProjectionMatrix()
+    yaw = 0; pitch = -.12; applyLook()
+    renderer.domElement.style.cursor = 'grab'
+    host.value?.focus({ preventScroll: true })
+  }, animate)
+}
+function resetLook() { if (seated && !props.blocked && !transitioning.value) { yaw = 0; pitch = -.12; applyLook(); host.value?.focus({ preventScroll: true }) } }
+defineExpose({ resetLook })
+function onKey(e) {
+  if (!seated || props.blocked || transitioning.value) return
+  const step = .06
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
+  e.preventDefault(); e.stopPropagation()
+  if (e.key === 'ArrowLeft') yaw -= step
+  if (e.key === 'ArrowRight') yaw += step
+  if (e.key === 'ArrowUp') pitch += step
+  if (e.key === 'ArrowDown') pitch -= step
+  applyLook()
+}
 function rebuild() {
   if (!renderer) return
   if (model) { scene.remove(model.root); model.dispose() }
@@ -53,7 +106,9 @@ function rebuild() {
   scene.add(model.root)
   scene.background = new THREE.Color(theme.isDark ? '#1c2632' : '#f1f3f0')
   model.updateSelection(props.selectedId)
-  tip.value = null; setView(props.view, false); invalidate()
+  tip.value = null
+  if (!seated) setView(props.view, false)
+  invalidate()
 }
 function hit(event) {
   const rect = renderer.domElement.getBoundingClientRect()
@@ -65,22 +120,37 @@ function hit(event) {
   renderer.domElement.style.cursor = seat ? 'pointer' : 'grab'
   return seat
 }
-function onDown(e) { pointerCount++; down = pointerCount === 1 ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null }
-function onMove(e) { if (!pointerCount && !props.blocked) hit(e); else tip.value = null }
+function onDown(e) {
+  if (props.blocked || transitioning.value || (e.pointerType === 'mouse' && e.button !== 0)) return
+  pointerCount++; down = pointerCount === 1 ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null
+  if (seated) { host.value.focus({ preventScroll: true }); host.value.setPointerCapture(e.pointerId) }
+}
+function onMove(e) {
+  if (props.blocked || transitioning.value) return
+  if (seated) {
+    if (down?.id === e.pointerId) {
+      yaw -= (e.clientX - down.x) * .005; pitch += (e.clientY - down.y) * .005
+      down.x = e.clientX; down.y = e.clientY; applyLook()
+    }
+    return
+  }
+  if (!pointerCount) hit(e); else tip.value = null
+}
 function onUp(e) {
   pointerCount = Math.max(0, pointerCount - 1)
-  if (down?.id === e.pointerId && !props.blocked && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) {
+  if (host.value?.hasPointerCapture(e.pointerId)) host.value.releasePointerCapture(e.pointerId)
+  if (!seated && !transitioning.value && down?.id === e.pointerId && !props.blocked && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) {
     const seat = hit(e); if (seat) emit('select', seat)
   }
   down = null
 }
 function cancel() { down = null; pointerCount = 0; tip.value = null }
 function contextLost(e) { e.preventDefault(); emit('error', '3D 显示已中断，请返回平面图后重试。') }
-function manual() { tip.value = null; emit('manual-view') }
-watch(() => props.selectedId, id => { model?.updateSelection(id); invalidate() })
+function manual() { tip.value = null; if (!seated) emit('manual-view') }
+watch(() => props.selectedId, id => { model?.updateSelection(id); if (props.view === 'firstPerson') enterSeat(); invalidate() })
 watch(() => [props.room, props.seats, theme.isDark], rebuild)
 watch(() => props.view, value => { if (value) setView(value) })
-watch(() => props.blocked, value => { if (controls) controls.enabled = !value })
+watch(() => props.blocked, () => { cancel(); syncControls() })
 onMounted(() => {
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
@@ -98,13 +168,13 @@ onMounted(() => {
     controls.addEventListener('change', invalidate); controls.addEventListener('start', manual)
     renderer.domElement.addEventListener('webglcontextlost', contextLost)
     resize(); rebuild()
-    observer = new ResizeObserver(() => { resize(); if (props.view) setView(props.view, false) })
+    observer = new ResizeObserver(() => { resize(); if (props.view && !seated && !transitioning.value) setView(props.view, false) })
     observer.observe(host.value)
     emit('ready')
   } catch { emit('error', '当前设备无法启动 3D 场景，可返回平面图继续选座。') }
 })
 onBeforeUnmount(() => {
-  disposed = true; cancelAnimationFrame(frame); observer?.disconnect(); cameraTween?.kill(); targetTween?.kill()
+  disposed = true; cancelAnimationFrame(frame); observer?.disconnect(); cameraTween?.kill(); targetTween?.kill(); fadeTween?.kill()
   controls?.dispose(); model?.dispose()
   renderer?.domElement.removeEventListener('webglcontextlost', contextLost)
   renderer?.dispose(); renderer?.forceContextLoss(); renderer?.domElement.remove()
@@ -112,7 +182,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="host" class="scene-host" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="cancel" @pointerleave="cancel">
+  <div ref="host" class="scene-host" tabindex="0" aria-label="三维座位场景，坐席体验中可拖动或使用方向键环视" @keydown="onKey" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="cancel" @pointerleave="cancel">
     <div v-if="tip" class="model-tip" :style="{ left: `${tip.x}px`, top: `${tip.y}px` }">
       <strong>{{ tip.seat.seat_no }} · {{ stateLabels[seatState(tip.seat, selectedId)] }}</strong>
       <span>{{ seatType(tip.seat) }} · {{ zoneName[tip.seat.zone] }}</span>

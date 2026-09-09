@@ -1,4 +1,7 @@
 export const zoneName = { quiet: '静音区', regular: '普通区', discussion: '研讨区', computer: '机房区' }
+export function seatPosition(room, seat) {
+  return { x: (seat.col_no - (room.seat_cols + 1) / 2) * 1.8, z: (seat.row_no - (room.seat_rows + 1) / 2) * 1.9 }
+}
 export function seatType(s) {
   return s.zone === 'computer' ? '电脑桌' : s.has_power ? '插座桌' : '普通桌'
 }

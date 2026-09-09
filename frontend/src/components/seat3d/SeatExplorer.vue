@@ -12,6 +12,9 @@ const emit = defineEmits(['select', 'submit', 'closed'])
 const panel = ref(null), backdrop = ref(null), content = ref(null), snapshot = ref(null)
 const Scene = shallowRef(null), error = ref(''), ready = ref(false), closing = ref(false), opening = ref(true), view = ref('overview')
 const selected = computed(() => props.seats.find(s => s.id === props.selectedId))
+const sceneRef = ref(null)
+const canExperience = computed(() => ready.value && !error.value && selected.value?.status === 'available' && !selected.value?.occupied)
+watch(canExperience, valid => { if (!valid && view.value === 'firstPerson') view.value = 'overview' })
 const busy = computed(() => props.loading || props.submitting || opening.value || closing.value || !!feedbackState.box)
 let animation, ctx, alive = true, restoreFocus, previousOverflow, originalVisibility, background, wasInert, clone
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -125,13 +128,15 @@ onBeforeUnmount(() => {
             <div class="view-switch" aria-label="切换视角">
               <button :class="{ active: view === 'overview' }" :disabled="busy" @click="view = 'overview'">◈ 总览</button>
               <button :class="{ active: view === 'top' }" :disabled="busy" @click="view = 'top'">▦ 俯视</button>
+              <button :class="{ active: view === 'firstPerson' }" :disabled="busy || !canExperience" :title="canExperience ? '从所选座位环视室内' : '请先选择可预约的座位'" @click="view = 'firstPerson'">坐席体验</button>
             </div>
             <div class="explorer-legend"><span v-for="(label, state) in stateLabels" :key="state"><i :style="{ background: stateColors[state] }" />{{ label }}</span></div>
           </div>
           <div class="explorer-stage" :aria-busy="!ready || loading">
-            <component :is="Scene" v-if="Scene && !error" :room="room" :seats="seats" :selected-id="selectedId" :view="view" :blocked="busy" @select="emit('select', $event)" @ready="ready = true" @error="error = $event" @manual-view="view = ''" />
+            <component :is="Scene" v-if="Scene && !error" ref="sceneRef" :room="room" :seats="seats" :selected-id="selectedId" :view="view" :blocked="busy" @select="emit('select', $event)" @ready="ready = true" @error="error = $event" @manual-view="view = ''" @exit-first-person="view = 'overview'" />
             <div v-if="error || !ready || loading" class="scene-message" role="status"><strong>{{ error ? '暂时无法显示 3D' : loading ? '正在更新座位' : '正在搭建你的自习空间' }}</strong><p>{{ error || '窗户、桌椅和座位正在就位…' }}</p><SButton v-if="error" @click="close()">返回座位平面图</SButton></div>
-            <div v-if="ready && !error" class="scene-hint">拖动旋转 · 滚轮 / 双指缩放 · 点击桌椅选座</div>
+            <div v-if="ready && !error && view === 'firstPerson'" class="seated-tools"><span aria-live="polite">正在体验 {{ selected?.seat_no }}</span><button :disabled="busy" @click="sceneRef?.resetLook()">回正视线</button></div>
+            <div v-if="ready && !error" class="scene-hint">{{ view === 'firstPerson' ? '拖动 / 方向键环视 · 点击总览退出体验' : '拖动旋转 · 滚轮 / 双指缩放 · 点击桌椅选座' }}</div>
           </div>
           <footer class="explorer-footer">
             <div class="explorer-selection" aria-live="polite"><strong>{{ selected ? `已选择 ${selected.seat_no}` : '找一个喜欢的位置' }}</strong><span>{{ selected ? `${seatType(selected)} · ${zoneName[selected.zone]}${selected.near_window ? ' · 靠窗' : ''}` : '选择可预约的桌椅，或使用座位列表' }}</span></div>
@@ -167,6 +172,9 @@ onBeforeUnmount(() => {
 .scene-message { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; background: var(--surface-2); color: var(--text-2); z-index: 3; }
 .scene-message p { color: var(--text-3); font-size: 13px; }
 .scene-hint { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); padding: 7px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text-3); font-size: 11px; white-space: nowrap; pointer-events: none; }
+.seated-tools { position: absolute; top: 12px; left: 14px; right: 14px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; gap: 8px; }
+.seated-tools span, .seated-tools button { padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; color: var(--text-2); font: inherit; font-size: 12px; }
+.seated-tools button { pointer-events: auto; cursor: pointer; }
 .explorer-footer { display: flex; align-items: center; gap: 16px; padding: 18px 26px; }
 .explorer-selection { flex: 1; min-width: 0; display: grid; gap: 5px; color: var(--text-1); font-size: 14px; }
 .explorer-selection span { color: var(--text-3); font-size: 12px; }
