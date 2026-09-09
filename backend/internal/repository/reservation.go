@@ -170,3 +170,57 @@ func (r *ReservationRepo) UpdateStatus(ctx context.Context, id int64, from []str
 	}
 	return tag.RowsAffected() > 0, nil
 }
+
+// ---- 调度器批量状态迁移(原子 UPDATE ... RETURNING) ----
+
+// ExpireNoShows 超时未签到 → 违约(开始后15分钟仍未签到)
+// 仅处理近两日数据, 避免历史数据被翻动
+func (r *ReservationRepo) ExpireNoShows(ctx context.Context) ([]*model.Reservation, error) {
+	return r.batchUpdate(ctx, `
+		UPDATE reservations SET status = 'violation', updated_at = now()
+		WHERE status = 'pending'
+		  AND res_date >= CURRENT_DATE - 1
+		  AND (res_date + start_time)::timestamp < now() - interval '15 minutes'
+		RETURNING `+resCols)
+}
+
+// AutoCompleteTimeout 到时未签退 → 已完成(使用中/临时离开且已过结束时间)
+func (r *ReservationRepo) AutoCompleteTimeout(ctx context.Context) ([]*model.Reservation, error) {
+	return r.batchUpdate(ctx, `
+		UPDATE reservations
+		SET status = 'completed', checkout_at = (res_date + end_time), updated_at = now()
+		WHERE status IN ('checked_in', 'temp_leave')
+		  AND res_date >= CURRENT_DATE - 1
+		  AND (res_date + end_time)::timestamp < now()
+		RETURNING `+resCols)
+}
+
+// EndTempLeaveTimeout 临时离开超时(30分钟) → 已完成
+func (r *ReservationRepo) EndTempLeaveTimeout(ctx context.Context) ([]*model.Reservation, error) {
+	return r.batchUpdate(ctx, `
+		UPDATE reservations
+		SET status = 'completed', checkout_at = now(), updated_at = now()
+		WHERE status = 'temp_leave'
+		  AND res_date >= CURRENT_DATE - 1
+		  AND leave_at < now() - interval '30 minutes'
+		RETURNING `+resCols)
+}
+
+// EndOverdueTempLeave 临时离开超时返回失败(供 Return 判断): 不更新, 仅查询
+
+func (r *ReservationRepo) batchUpdate(ctx context.Context, q string) ([]*model.Reservation, error) {
+	rows, err := r.pool.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []*model.Reservation
+	for rows.Next() {
+		res, err := scanReservation(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, res)
+	}
+	return list, rows.Err()
+}

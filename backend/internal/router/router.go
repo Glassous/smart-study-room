@@ -2,6 +2,8 @@
 package router
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -12,8 +14,8 @@ import (
 	"github.com/imicola/smart-study-room/backend/internal/service"
 )
 
-// Setup 组装数据层/服务层/路由树
-func Setup(pool *pgxpool.Pool, cfg *config.Config) *gin.Engine {
+// Setup 组装数据层/服务层/路由树, 并返回待启动的调度器
+func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Scheduler) {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery(), middleware.CORS())
 
@@ -27,13 +29,14 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) *gin.Engine {
 	authService := service.NewAuthService(userRepo, cfg)
 	seatService := service.NewSeatService(roomRepo, seatRepo)
 	reservationService := service.NewReservationService(reservationRepo, roomRepo, seatRepo, userRepo)
+	lifecycleService := service.NewLifecycleService(reservationRepo)
 
 	// 处理层
 	health := handler.NewHealthHandler(pool)
 	auth := handler.NewAuthHandler(authService)
 	room := handler.NewRoomHandler(seatService)
 	adminRoom := handler.NewAdminRoomHandler(seatService)
-	reservation := handler.NewReservationHandler(reservationService)
+	reservation := handler.NewReservationHandler(reservationService, lifecycleService)
 
 	api := r.Group("/api")
 	{
@@ -54,6 +57,10 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) *gin.Engine {
 			authorized.POST("/reservations", reservation.Create)
 			authorized.GET("/reservations/mine", reservation.ListMine)
 			authorized.POST("/reservations/:id/cancel", reservation.Cancel)
+			authorized.POST("/reservations/:id/checkin", reservation.Checkin)
+			authorized.POST("/reservations/:id/leave", reservation.Leave)
+			authorized.POST("/reservations/:id/return", reservation.ReturnBack)
+			authorized.POST("/reservations/:id/checkout", reservation.Checkout)
 		}
 
 		// 管理端: 房间/座位维护(仅 admin)
@@ -69,5 +76,5 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) *gin.Engine {
 		}
 	}
 
-	return r
+	return r, service.NewScheduler(lifecycleService, time.Minute)
 }
