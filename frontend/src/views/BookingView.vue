@@ -1,4 +1,5 @@
 <script setup>
+import SAnimatedNumber from '../components/ui/SAnimatedNumber.vue'
 import { ref, computed, onMounted } from 'vue'
 import SeatExplorer from '../components/seat3d/SeatExplorer.vue'
 import SeatPlanDesk from '../components/SeatPlanDesk.vue'
@@ -267,14 +268,14 @@ onMounted(loadRooms)
 </script>
 
 <template>
-  <div class="page-view">
+  <div v-reveal class="page-view">
     <header class="view-heading" data-page-title>
       <h1>座位预约</h1>
       <p class="heading-sub">选择自习室与时段，点击平面图中的座位提交预约</p>
     </header>
-    <!-- 座位预约：页面级双栏 = 左筛选 | 右座位图 -->
+    <!-- 预约条件、紧凑信息条、座位图 -->
     <div class="split booking-split">
-    <!-- 左栏：筛选 + 智能分配 + 统计 + 图例 -->
+    <!-- 筛选与统计操作区 -->
     <div class="split-left">
       <section class="card responsive-compact">
         <div class="card-title-row">
@@ -305,53 +306,48 @@ onMounted(loadRooms)
         </div>
       </section>
 
-      <section class="card responsive-compact">
-        <div class="card-title-row">
-          <h3>实时数据</h3>
-        </div>
+      <section class="card booking-summary" aria-label="座位统计、图例与快捷操作">
+        <div class="booking-counts" aria-label="座位数量统计">
         <div class="kpi-grid">
           <div class="kpi">
-            <div class="kpi-num">{{ seatStats.total }}</div>
+            <div class="kpi-num"><SAnimatedNumber :value="seatStats.total" /></div>
             <div class="kpi-label">座位总数</div>
           </div>
           <div class="kpi kpi-ok">
-            <div class="kpi-num">{{ seatStats.free }}</div>
+            <div class="kpi-num"><SAnimatedNumber :value="seatStats.free" /></div>
             <div class="kpi-label">当前空闲</div>
           </div>
           <div class="kpi kpi-bad">
-            <div class="kpi-num">{{ seatStats.occ }}</div>
+            <div class="kpi-num"><SAnimatedNumber :value="seatStats.occ" /></div>
             <div class="kpi-label">时段内占用</div>
           </div>
           <div class="kpi">
-            <div class="kpi-num">{{ seatStats.down }}</div>
+            <div class="kpi-num"><SAnimatedNumber :value="seatStats.down" /></div>
             <div class="kpi-label">维护/停用</div>
           </div>
         </div>
-      </section>
-
-      <section class="card responsive-compact">
-        <div class="card-title-row">
-          <h3>快捷操作</h3>
         </div>
-        <div class="actions">
-          <SButton variant="primary" block @click="openAlloc">
-            <AppIcon name="sparkles" :size="16" />智能分配
-          </SButton>
-          <SButton variant="secondary" block @click="loadSeatMap">
-            <AppIcon name="refresh" :size="16" />刷新座位图
-          </SButton>
-        </div>
-        <div class="legend">
+        <div class="booking-legends" aria-label="座位类型与状态图例">
+<div class="legend">
           <div class="legend-item"><span class="type-ico"><AppIcon name="desk-book" :size="16" /></span><span>普通桌</span></div>
           <div class="legend-item"><span class="type-ico"><AppIcon name="desk-power" :size="16" /></span><span>插座桌</span></div>
           <div class="legend-item"><span class="type-ico"><AppIcon name="desk-pc" :size="16" /></span><span>电脑桌</span></div>
           <div class="legend-item"><span class="type-ico type-ico--window" /><span>窗户</span></div>
         </div>
         <div class="legend legend--status">
-          <div class="legend-item"><span class="dot dot-free" /><span>空闲（可预约）</span></div>
+          <div class="legend-item"><span class="dot dot-free" /><span>可预约</span></div>
           <div class="legend-item"><span class="dot dot-selected" /><span>已选中</span></div>
           <div class="legend-item"><span class="dot dot-occupied" /><span>占用</span></div>
           <div class="legend-item"><span class="dot dot-disabled" /><span>维护/停用</span></div>
+        </div>
+        </div>
+<div class="booking-actions">
+          <SButton variant="primary" block @click="openAlloc">
+            <AppIcon name="sparkles" :size="16" />智能分配
+          </SButton>
+          <SButton variant="secondary" block @click="loadSeatMap">
+            <AppIcon name="refresh" :size="16" />刷新座位图
+          </SButton>
         </div>
       </section>
     </div>
@@ -413,7 +409,7 @@ onMounted(loadRooms)
       <section class="card selected-card" :class="{ 'selected-card--empty': !selected }">
         <div class="sel-info">
           <div class="sel-icon"><AppIcon name="seat" :size="25" /></div>
-          <div class="sel-detail">
+          <div class="sel-detail" :key="selected?.id || 'empty'">
             <template v-if="selected">
               <div class="sel-title">
                 已选择 <b>{{ selected.seat_no }}</b>
@@ -495,10 +491,7 @@ onMounted(loadRooms)
 <style scoped>
 .seat-card > .card-title-row > div { width: 100%; }
 .seat-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.booking-split {
-  grid-template-columns: 320px 1fr;
-  align-items: start;
-}
+
 
 /* 时段选择并排 */
 .time-pair {
@@ -512,13 +505,37 @@ onMounted(loadRooms)
   color: var(--text-4);
 }
 
-.actions {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  margin-bottom: 14px;
+.booking-summary {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.15fr) max-content;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
 }
+.booking-counts { min-width: 0; }
+.booking-counts .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
+.booking-counts .kpi { padding: 6px 10px; }
+.booking-counts .kpi-num { font-size: 24px; }
+.booking-counts .kpi-label { font-size: 12px; white-space: nowrap; }
+.booking-legends { display: grid; gap: 12px; min-width: 0; padding-inline: 16px; border-inline: 1px solid var(--border); }
+.booking-legends .legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 0; border: 0; margin: 0; }
+.booking-legends .legend-item { gap: 5px; white-space: nowrap; font-size: 12px; }
+.booking-actions { display: flex; flex-direction: column; align-items: stretch; justify-content: center; align-self: stretch; gap: 8px; margin: 0; padding: 0; }
+.booking-actions :deep(.s-btn) { margin: 0; }
+@media (max-width: 1024px) {
+  .booking-summary { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .booking-legends { width: 100%; padding: 14px 0; border-inline: 0; border-block: 1px solid var(--border); }
+  .booking-actions { width: 100%; flex-direction: row; align-items: center; }
+  .booking-actions :deep(.s-btn) { flex: 1; min-width: 0; }
+}
+@media (max-width: 420px) {
+  .booking-counts .kpi { padding-inline: 4px; }
+  .booking-counts .kpi-num { font-size: 22px; }
+  .booking-counts .kpi-label, .booking-legends .legend-item { font-size: 11px; }
+  .booking-legends .legend { gap: 6px; }
+  .booking-legends .dot { width: 11px; height: 11px; flex-shrink: 0; }
+}
+
 
 .legend {
   display: grid;
@@ -658,7 +675,7 @@ onMounted(loadRooms)
   box-shadow: inset 0 2px 8px #00000012;
 }
 .seat {
-  min-height: 82px;
+  min-height: 62px;
   min-width: 0;
   padding: 6px 3px;
   appearance: none;
