@@ -37,6 +37,7 @@ type ReservationService struct {
 	rooms        *repository.RoomRepo
 	seats        *repository.SeatRepo
 	users        *repository.UserRepo
+	credit       *CreditService
 }
 
 func NewReservationService(
@@ -44,8 +45,9 @@ func NewReservationService(
 	rooms *repository.RoomRepo,
 	seats *repository.SeatRepo,
 	users *repository.UserRepo,
+	credit *CreditService,
 ) *ReservationService {
-	return &ReservationService{reservations: reservations, rooms: rooms, seats: seats, users: users}
+	return &ReservationService{reservations: reservations, rooms: rooms, seats: seats, users: users, credit: credit}
 }
 
 // validateSlot 校验时段格式/粒度/时长
@@ -150,6 +152,7 @@ func (s *ReservationService) CreateWithSource(ctx context.Context, userID int64,
 }
 
 // Cancel 取消预约(pending 状态)
+// 距开始不足 30 分钟取消视为迟到取消, 信用 -2
 func (s *ReservationService) Cancel(ctx context.Context, userID, resID int64) error {
 	res, err := s.reservations.GetByID(ctx, resID)
 	if err != nil {
@@ -171,6 +174,14 @@ func (s *ReservationService) Cancel(ctx context.Context, userID, resID int64) er
 	}
 	if !updated {
 		return ErrInvalidState
+	}
+	// 迟到取消扣分(不影响取消结果)
+	if st, err := resStart(res); err == nil && time.Until(st) < 30*time.Minute {
+		if s.credit != nil {
+			if err := s.credit.ApplyLateCancel(ctx, res); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
