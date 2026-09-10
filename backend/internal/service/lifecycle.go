@@ -33,6 +33,27 @@ type noopHooks struct{}
 func (noopHooks) OnViolation(*model.Reservation) {}
 func (noopHooks) OnComplete(*model.Reservation)  {}
 
+// CompositeHooks 组合多个生命周期钩子(如 信用 + 通知)
+type CompositeHooks struct {
+	hooks []LifecycleHooks
+}
+
+func NewCompositeHooks(hs ...LifecycleHooks) *CompositeHooks {
+	return &CompositeHooks{hooks: hs}
+}
+
+func (c *CompositeHooks) OnViolation(res *model.Reservation) {
+	for _, h := range c.hooks {
+		h.OnViolation(res)
+	}
+}
+
+func (c *CompositeHooks) OnComplete(res *model.Reservation) {
+	for _, h := range c.hooks {
+		h.OnComplete(res)
+	}
+}
+
 // LifecycleService 预约生命周期流转
 type LifecycleService struct {
 	reservations *repository.ReservationRepo
