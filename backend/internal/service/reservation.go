@@ -67,6 +67,11 @@ func validateSlot(date, start, end string) (time.Time, time.Time, error) {
 
 // Create 创建预约(手动选座)
 func (s *ReservationService) Create(ctx context.Context, userID int64, req *model.CreateReservationRequest) (*model.ReservationView, error) {
+	return s.CreateWithSource(ctx, userID, req, model.SrcManual)
+}
+
+// CreateWithSource 创建预约(指定来源: manual/auto/waitlist)
+func (s *ReservationService) CreateWithSource(ctx context.Context, userID int64, req *model.CreateReservationRequest, source string) (*model.ReservationView, error) {
 	st, _, err := validateSlot(req.Date, req.StartTime, req.EndTime)
 	if err != nil {
 		return nil, err
@@ -123,7 +128,7 @@ func (s *ReservationService) Create(ctx context.Context, userID int64, req *mode
 		StartTime: padTime(req.StartTime),
 		EndTime:   padTime(req.EndTime),
 		Status:    model.ResPending,
-		Source:    model.SrcManual,
+		Source:    source,
 	}
 	if err := s.reservations.Create(ctx, res); err != nil {
 		var pgErr *pgconn.PgError
