@@ -26,6 +26,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	reservationRepo := repository.NewReservationRepo(pool)
 	creditRepo := repository.NewCreditRepo(pool)
 	notificationRepo := repository.NewNotificationRepo(pool)
+	waitlistRepo := repository.NewWaitlistRepo(pool)
 
 	// 服务层
 	authService := service.NewAuthService(userRepo, cfg)
@@ -36,6 +37,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	lifecycleService := service.NewLifecycleService(reservationRepo)
 	lifecycleService.SetHooks(service.NewCompositeHooks(creditService, notificationService)) // 违约扣分+警告通知 / 履约加分
 	allocationService := service.NewAllocationService(seatRepo, roomRepo, userRepo, reservationRepo, reservationService)
+	waitlistService := service.NewWaitlistService(waitlistRepo, seatRepo, reservationRepo, reservationService, notificationService)
 
 	// 处理层
 	health := handler.NewHealthHandler(pool)
@@ -46,6 +48,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	allocation := handler.NewAllocationHandler(allocationService)
 	credit := handler.NewCreditHandler(creditService)
 	notify := handler.NewNotificationHandler(notificationService)
+	waitlist := handler.NewWaitlistHandler(waitlistService)
 
 	api := r.Group("/api")
 	{
@@ -79,6 +82,12 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 				notifyGroup.POST("/:id/read", notify.MarkRead)
 				notifyGroup.POST("/read_all", notify.MarkAllRead)
 			}
+			waitlistGroup := authorized.Group("/waitlist")
+			{
+				waitlistGroup.POST("", waitlist.Join)
+				waitlistGroup.GET("/mine", waitlist.ListMine)
+				waitlistGroup.POST("/:id/cancel", waitlist.Cancel)
+			}
 		}
 
 		// 管理端: 房间/座位维护(仅 admin)
@@ -94,5 +103,5 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 		}
 	}
 
-	return r, service.NewScheduler(lifecycleService, time.Minute)
+	return r, service.NewScheduler(lifecycleService, waitlistService, time.Minute)
 }
