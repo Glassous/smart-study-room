@@ -18,6 +18,12 @@ const routes = [
         name: 'home',
         component: () => import('../views/HomeView.vue'),
         meta: { title: '首页' }
+      },
+      {
+        path: '/booking',
+        name: 'booking',
+        component: () => import('../views/BookingView.vue'),
+        meta: { title: '座位预约', requiresAuth: true }
       }
     ]
   }
