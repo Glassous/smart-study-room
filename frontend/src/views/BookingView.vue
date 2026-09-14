@@ -409,7 +409,7 @@ onMounted(loadRooms)
         </div>
       </section>
 
-      <!-- 已选座位操作条（常驻可见：未选座位时为提示态，提交按钮禁用） -->
+      <!-- 已选座位操作条（随页面滚动，未选座位时为提示态，提交按钮禁用） -->
       <section class="card selected-card" :class="{ 'selected-card--empty': !selected }">
         <div class="sel-info">
           <div class="sel-icon"><AppIcon name="seat" :size="25" /></div>

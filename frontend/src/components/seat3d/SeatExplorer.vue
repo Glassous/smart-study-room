@@ -1,12 +1,10 @@
 <script setup>
 import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { gsap } from 'gsap'
-import { Flip } from 'gsap/Flip'
 import SButton from '../ui/SButton.vue'
 import { feedbackState } from '../ui/feedback'
 import { seatType, seatState, stateLabels, stateColors, zoneName } from './seatPresentation'
 
-gsap.registerPlugin(Flip)
 const props = defineProps({ origin: Object, room: Object, seats: Array, selectedId: Number, date: String, start: String, end: String, loading: Boolean, submitting: Boolean })
 const emit = defineEmits(['select', 'submit', 'closed'])
 const panel = ref(null), backdrop = ref(null), content = ref(null), snapshot = ref(null)
@@ -16,18 +14,48 @@ const sceneRef = ref(null)
 const canExperience = computed(() => ready.value && !error.value && selected.value?.status === 'available' && !selected.value?.occupied)
 watch(canExperience, valid => { if (!valid && view.value === 'firstPerson') view.value = 'overview' })
 const busy = computed(() => props.loading || props.submitting || opening.value || closing.value || !!feedbackState.box)
+let sceneLoadFrame = 0
 let animation, ctx, alive = true, restoreFocus, previousOverflow, originalVisibility, background, wasInert, clone
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+// Measure the untransformed layout once; never fit/revert the live panel mid-animation.
+function originTransform() {
+  const source = props.origin.getBoundingClientRect()
+  const width = panel.value.offsetWidth, height = panel.value.offsetHeight
+  const overlay = panel.value.parentElement.getBoundingClientRect()
+  return { x: source.left - (overlay.left + (overlay.width - width) / 2),
+    y: source.top - (overlay.top + (overlay.height - height) / 2),
+    scaleX: source.width / width, scaleY: source.height / height }
+}
 function refreshSnapshot() {
+  const width = props.origin.offsetWidth, height = props.origin.offsetHeight
   clone = props.origin.cloneNode(true)
   clone.removeAttribute('id'); clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'))
-  clone.style.cssText = 'width:100%;height:100%;margin:0;box-shadow:none;visibility:visible;overflow:hidden;'
+  // Preserve the source card's line wrapping and grid layout at both handoff points.
+  Object.assign(clone.style, { width: `${width}px`, height: `${height}px`, maxWidth: 'none',
+    boxSizing: 'border-box', margin: '0', visibility: 'visible', overflow: 'hidden',
+    transformOrigin: '0 0', transform: `scale(${panel.value.clientWidth / width}, ${panel.value.clientHeight / height})` })
   clone.inert = true
   snapshot.value.replaceChildren(clone)
+}
+// Keep module evaluation, model construction and the first WebGL render off the opening tween.
+function finishOpening() {
+  opening.value = false
+  gsap.set(panel.value, { willChange: 'auto' })
+  sceneLoadFrame = requestAnimationFrame(() => {
+    sceneLoadFrame = requestAnimationFrame(async () => {
+      if (!alive || closing.value) return
+      try {
+        const module = await import('./SeatScene.vue')
+        if (alive && !closing.value) Scene.value = module.default
+      } catch { if (alive && !closing.value) error.value = '3D 资源加载失败，请返回平面图后重试。' }
+    })
+  })
 }
 function close(force = false) {
   if (closing.value || (!force && props.submitting)) return
   closing.value = true
+  cancelAnimationFrame(sceneLoadFrame)
+  gsap.set(panel.value, { willChange: 'transform' })
   animation?.kill()
   gsap.killTweensOf([panel.value, content.value, snapshot.value, backdrop.value])
   opening.value = false
@@ -35,10 +63,10 @@ function close(force = false) {
   const duration = reduced() ? .12 : .45
   ctx.add(() => {
     gsap.to(content.value, { opacity: 0, duration: duration * .55 })
-    gsap.to(snapshot.value, { opacity: 1, duration: duration * .65 })
+    gsap.to(snapshot.value, { autoAlpha: 1, duration: duration * .65 })
     gsap.to(backdrop.value, { opacity: 0, duration })
     if (props.origin?.isConnected && !reduced()) {
-      animation = Flip.fit(panel.value, props.origin, { scale: false, duration, ease: 'power3.inOut', onComplete: () => emit('closed') })
+      animation = gsap.to(panel.value, { ...originTransform(), duration, ease: 'power3.inOut', overwrite: 'auto', onComplete: () => emit('closed') })
     } else animation = gsap.to(panel.value, { opacity: 0, duration, onComplete: () => emit('closed') })
   })
 }
@@ -66,12 +94,13 @@ watch(() => feedbackState.box, async box => {
   if (root) (focusables(root)[0] || root).focus({ preventScroll: true })
 })
 function resized() {
-  if (closing.value) { animation?.kill(); emit('closed'); return }
-  animation?.progress(1)
-  gsap.set(panel.value, { clearProps: 'transform,width,height,top,left,position' })
+  // A resize must not force an unfinished tween to its endpoint.
+  if (opening.value || closing.value) return
+  panel.value.style.width = ''
+  panel.value.style.height = ''
 }
 function chooseFromList(e) { const s = props.seats.find(s => String(s.id) === e.target.value); if (s) emit('select', s) }
-onMounted(async () => {
+onMounted(() => {
   restoreFocus = document.activeElement
   previousOverflow = document.body.style.overflow
   document.body.style.overflow = 'hidden'
@@ -79,32 +108,32 @@ onMounted(async () => {
   wasInert = background?.inert
   if (background) background.inert = true
   originalVisibility = props.origin.style.visibility
+  // Freeze layout dimensions while the visual shell travels between the two rectangles.
+  const bounds = panel.value.getBoundingClientRect()
+  panel.value.style.width = `${bounds.width}px`
+  panel.value.style.height = `${bounds.height}px`
   refreshSnapshot()
   props.origin.style.visibility = 'hidden'
   ctx = gsap.context(() => {}, panel.value)
   ctx.add(() => {
     const duration = reduced() ? .12 : .55
+    gsap.set(panel.value, { willChange: 'transform' })
     gsap.set(content.value, { opacity: 0 })
     if (!reduced()) {
-      Flip.fit(panel.value, props.origin, { scale: false })
-      const state = Flip.getState(panel.value)
-      gsap.set(panel.value, { clearProps: 'transform,width,height,top,left,position' })
-      animation = Flip.from(state, { duration, scale: false, ease: 'power3.inOut', onComplete: () => { opening.value = false } })
-    } else animation = gsap.from(panel.value, { opacity: 0, duration, onComplete: () => { opening.value = false } })
+      gsap.set(panel.value, originTransform())
+      animation = gsap.to(panel.value, { x: 0, y: 0, scaleX: 1, scaleY: 1,
+        duration, ease: 'power3.inOut', onComplete: finishOpening })
+    } else animation = gsap.from(panel.value, { opacity: 0, duration, onComplete: finishOpening })
     gsap.fromTo(backdrop.value, { opacity: 0 }, { opacity: 1, duration })
-    gsap.to(snapshot.value, { opacity: 0, delay: duration * .25, duration: duration * .65 })
+    gsap.to(snapshot.value, { autoAlpha: 0, delay: duration * .25, duration: duration * .65 })
     gsap.to(content.value, { opacity: 1, delay: duration * .3, duration: duration * .7 })
   })
   panel.value.focus({ preventScroll: true })
   document.addEventListener('keydown', onKey, true)
   window.addEventListener('resize', resized)
-  try {
-    const module = await import('./SeatScene.vue')
-    if (alive && !closing.value) Scene.value = module.default
-  } catch { if (alive) error.value = '3D 资源加载失败，请返回平面图后重试。' }
 })
 onBeforeUnmount(() => {
-  alive = false; animation?.kill(); ctx?.revert()
+  alive = false; cancelAnimationFrame(sceneLoadFrame); animation?.kill(); ctx?.revert()
   document.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', resized)
   document.body.style.overflow = previousOverflow
   if (background) background.inert = wasInert
@@ -151,8 +180,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .seat-explorer { position: fixed; inset: 0; z-index: var(--z-dialog); display: grid; place-items: center; }
-.explorer-backdrop { position: absolute; inset: 0; background: rgb(20 29 43 / 35%); backdrop-filter: blur(12px); }
-.explorer-panel { position: relative; width: min(1280px, calc(100vw - 48px)); height: min(850px, calc(100dvh - 48px)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-4); overflow: hidden; outline: none; }
+.explorer-backdrop { position: absolute; inset: 0; background: rgb(20 29 43 / 35%); }
+.explorer-panel { position: relative; width: min(1280px, calc(100vw - 48px)); height: min(850px, calc(100dvh - 48px)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-4); overflow: hidden; outline: none; box-sizing: border-box; transform-origin: 0 0; transition: none; }
 .explorer-content { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; }
 .explorer-snapshot { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .explorer-head { padding: 22px 26px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
