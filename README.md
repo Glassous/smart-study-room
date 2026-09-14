@@ -248,14 +248,26 @@ docker-compose.yml    PostgreSQL 18 + Redis 7 + 后端多容器编排
 | [02_需求规格说明书.md](docs/02_需求规格说明书.md) | 数据字典（9 张表）、FR-01~FR-15、M1~M10 模块、性能与安全需求 |
 | [03_概要设计说明书.md](docs/03_概要设计说明书.md) | 四层架构、模块划分与负责人、接口设计、ER/物理结构、出错处理 |
 | [04_详细设计说明书.md](docs/04_详细设计说明书.md) | 逐模块十要素、算法与程序逻辑、Redis 组件设计、测试要点 |
-| [05_开发进度日志.md](docs/05_开发进度日志.md) | 8 项工作计划、成员分工、问题与下一阶段计划 |
+| [05_开发进度日志.md](docs/05_开发进度日志.md) | 15 天全栈并行迭代日志、任务看板与工时统计 |
 | [06_系统测试报告.md](docs/06_系统测试报告.md) | 单元测试、E2E 集成测试、并发性能测试、前端构建验证 |
 | [07_测试计划.md](docs/07_测试计划.md) | 测试目标与范围、三层测试策略、环境、准入准出标准、风险 |
 | [08_测试用例.md](docs/08_测试用例.md) | 50 条用例（单元 22 / E2E 23 / 并发 3 / 构建 2） |
 | [09_缺陷报告.md](docs/09_缺陷报告.md) | 8 项缺陷与改进项明细、分级、处理状态与遗留计划 |
-| [10_项目管理计划.md](docs/10_项目管理计划.md) | 目标范围、组织分工、里程碑、质量、配置与风险管理 |
+| [10_项目管理计划.md](docs/10_项目管理计划.md) | 目标范围、组织分工、WBS 字典、RACI 责任矩阵、里程碑与质量配置管理 |
 
 > 每份 Markdown 均配套同名 `.docx`（如 `docs/测试计划.docx`），可直接提交。
+
+## 小组分工
+
+本项目全面采用**「5 大功能模块垂直全栈分工」**体系，每位成员作为主责模块的全栈负责人，端到端负责该业务域的前端交互与组件、后端领域模型与 API 接口、数据持久化与 Redis 缓存优化、自动化测试以及工程交付，彻底消除传统横向流水线壁垒：
+
+| 序号 | 姓名 | 学号 | GitHub | 模块归属 | 前端职责 | 后端职责 | 数据/缓存职责 | 项目统筹/工程职责 |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | **赵晨曦** | 2404060302 | [imicola](https://github.com/imicola) | **模块一：用户与权限模块** | 登录、注册、个人中心页面及交互 (`LoginView.vue`, `ProfileView.vue`)，管理端用户管理 (`AdminView.vue`)，Pinia 认证状态与路由守卫 | 身份认证（JWT）、RBAC 权限控制、用户管理 API (`auth.go`, `admin_user.go`)、JWT 黑名单拦截中间件 (`middleware/auth.go`) | 用户表 (`users`)、Redis 黑名单 (`studyroom:auth:blacklist:*`)、用户领域模型与 Claims | 组长、总体架构、代码审查与合并、报告统稿 |
+| 2 | **叶泳言** | 2304060322 | [Glassous](https://github.com/Glassous) | **模块二：座位与预约模块** | 座位平面图展示、在线选座交互 (`SeatPlanDesk.vue`, `BookingView.vue`)、我的预约与状态看板 (`MyReservationsView.vue`) | 预约引擎 (`reservation.go`)、全生命周期状态流转 (`lifecycle.go`)、智能自动分配加权算法 (`allocation.go`)、座位管理 (`seat.go`) | 座位表 (`seats`/`rooms`)、预约表 (`reservations`)、PostgreSQL GiST 排除约束 (`excl_seat_overlap`, `excl_user_overlap`)、Redis 分布式锁 (`studyroom:lock:seat:*`) 与看门狗续期 (`redissync`) | 核心预约业务模型与状态机设计 |
+| 3 | **姜文东** | 2404060307 | [DonGKids](https://github.com/DonGKids) | **模块三：信用与候补模块** | 信用分看板、候补排队交互列表 (`WaitlistView.vue`)、系统消息与通知中心页面 (`NotificationsView.vue`) | 信用分奖惩机制与禁约判定 (`credit.go`)、候补排队与自动递补引擎 (`waitlist.go`)、站内信通知推送 (`notification.go`) | 信用流水表 (`credit_logs`)、候补表 (`waitlist`)、通知表 (`notifications`)、候补与通知复合索引设计 | 规则治理与队列递补机制设计 |
+| 4 | **邹字** | 2404060319 | [hjsdjuhv8](https://github.com/hjsdjuhv8) | **模块四：统计与可视化模块** | 空间占用热力图、运营数据大屏 (`AnalyticsView.vue`)、3D 座位选座与视角探索 (`components/seat3d/*`)、GSAP 动效整合 | 运营与使用率统计聚合 API (`stats.go`)、历史时段热度统计分析、热力图矩阵计算 | Redis 统计聚合缓存 (`studyroom:cache:stats:*` 叠加 ±10% Jitter 防雪崩)、预约历史多维分析 | 数据聚合流水线与可视化引擎设计 |
+| 5 | **王建东** | 2404060309 | [nightsky5819](https://github.com/nightsky5819) | **模块五：AI 助手与运维模块** | AI 悬浮球对话交互 (`AIAssistant.vue`)、个性化推荐卡片展示、卡片二次确认弹窗 | AI 智能对话与推荐服务 (`ai.go`, `ai_client.go`)、分布式限流中间件 (`ratelimit.go`)、定时巡检调度 (`scheduler.go`)、服务降级与容灾 | AI 对话与消息表 (`ai_conversations`/`ai_messages`)、Redis 分布式限流与调度键 (`studyroom:ratelimit:*`, `studyroom:scheduler:leader`) | 质量保障、测试框架、高可用运维与 CI/CD |
 
 ## 已知限制与演进方向
 

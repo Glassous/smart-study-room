@@ -32,3 +32,6 @@ tmp/
 # 文档备份与本地转换脚本（不入库）
 docs/_backup_docx/
 tools/
+
+# Agent 协同与临时目录
+.agents/
