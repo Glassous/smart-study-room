@@ -32,7 +32,7 @@ details[open] > :not(summary) { animation: detail-reveal .22s var(--ease-out); }
 .booking-split .split-left { grid-template-columns: minmax(0, 1fr); }
 .booking-split .filter-group { grid-template-columns: 1fr 1fr 1.4fr; }
 .booking-split .split-left > .card:first-child .card-title-row { display: none; }
-.booking-split .selected-card { position: sticky; bottom: 16px; z-index: 12; box-shadow: var(--shadow-2); }
+.booking-split .selected-card { box-shadow: var(--shadow-2); }
 .profile-split .split-left { grid-template-columns: .8fr 1fr 1.2fr; align-items: stretch; }
 .profile-split.profile-admin .split-left { grid-template-columns: 1fr 2fr; }
 .analytics-split .split-left { grid-template-columns: 1.2fr 1fr; align-items: start; }
@@ -76,7 +76,6 @@ details[open] > :not(summary) { animation: detail-reveal .22s var(--ease-out); }
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-num { font-size: 23px; }
   .filter-group, .booking-split .filter-group, .profile-split .split-left, .profile-split.profile-admin .split-left, .admin-split .split-left { grid-template-columns: minmax(0, 1fr); }
-  .booking-split .selected-card { position: static; }
   .side-nav-item, .seg-btn, .pagination button, .chart-tabs button { min-height: 44px; box-sizing: border-box; }
   .s-btn { min-height: 44px; }
   .home-split .shortcut-grid { grid-template-columns: minmax(0, 1fr); }

@@ -16,6 +16,7 @@ const transitioning = ref(false)
 let seated = false, yaw = 0, pitch = -.12, fadeTween
 const lookDirection = new THREE.Vector3()
 let renderer, scene, camera, controls, model, observer, frame = 0, cameraTween, targetTween
+let renderWidth = 0, renderHeight = 0
 let down = null, disposed = false, pointerCount = 0
 const ray = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
@@ -30,10 +31,14 @@ function invalidate() {
   })
 }
 function resize() {
-  if (!renderer || !host.value) return
-  const { width, height } = host.value.getBoundingClientRect()
-  renderer.setSize(Math.max(width, 1), Math.max(height, 1))
+  if (!renderer || !host.value) return false
+  // CSS transforms change visual bounds, not the canvas's drawing-buffer size.
+  const width = Math.max(host.value.clientWidth, 1), height = Math.max(host.value.clientHeight, 1)
+  if (width === renderWidth && height === renderHeight) return false
+  renderWidth = width; renderHeight = height
+  renderer.setSize(width, height)
   camera.aspect = width / Math.max(height, 1); camera.updateProjectionMatrix(); invalidate()
+  return true
 }
 function setView(view = 'overview', animate = true) {
   if (!model) return
@@ -168,7 +173,7 @@ onMounted(() => {
     controls.addEventListener('change', invalidate); controls.addEventListener('start', manual)
     renderer.domElement.addEventListener('webglcontextlost', contextLost)
     resize(); rebuild()
-    observer = new ResizeObserver(() => { resize(); if (props.view && !seated && !transitioning.value) setView(props.view, false) })
+    observer = new ResizeObserver(() => { if (resize() && props.view && !seated && !transitioning.value) setView(props.view, false) })
     observer.observe(host.value)
     emit('ready')
   } catch { emit('error', '当前设备无法启动 3D 场景，可返回平面图继续选座。') }
