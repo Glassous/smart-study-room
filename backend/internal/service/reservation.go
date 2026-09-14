@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -54,7 +55,13 @@ func NewReservationService(
 }
 
 // validateSlot 校验时段格式/粒度/时长
+// 注意: time.Parse 对无前导零的小时("9:00")是宽容的, 需先做严格 HH:MM 预校验
+var slotRe = regexp.MustCompile(`^\d{2}:\d{2}$`)
+
 func validateSlot(date, start, end string) (time.Time, time.Time, error) {
+	if !slotRe.MatchString(start) || !slotRe.MatchString(end) {
+		return time.Time{}, time.Time{}, ErrBadSlot
+	}
 	st, err1 := time.ParseInLocation("2006-01-02 15:04", date+" "+start, time.Local)
 	en, err2 := time.ParseInLocation("2006-01-02 15:04", date+" "+end, time.Local)
 	if err1 != nil || err2 != nil || !en.After(st) {
