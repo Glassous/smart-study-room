@@ -24,6 +24,18 @@ const routes = [
         name: 'booking',
         component: () => import('../views/BookingView.vue'),
         meta: { title: '座位预约', requiresAuth: true }
+      },
+      {
+        path: '/mine',
+        name: 'mine',
+        component: () => import('../views/MyReservationsView.vue'),
+        meta: { title: '我的预约', requiresAuth: true }
+      },
+      {
+        path: '/waitlist',
+        name: 'waitlist',
+        component: () => import('../views/WaitlistView.vue'),
+        meta: { title: '我的候补', requiresAuth: true }
       }
     ]
   }
