@@ -1,0 +1,144 @@
+%% 图 2-1 核心领域类图
+classDiagram
+    direction LR
+
+    class User {
+        +int64 ID
+        +string Username
+        -string PasswordHash
+        +string RealName
+        +string StudentNo
+        +string Role
+        +int CreditScore
+        +Time CreditBannedUntil
+        +string Status
+        +ToPublic() UserPublic
+    }
+
+    class Room {
+        +int64 ID
+        +string Name
+        +string Location
+        +Time OpenTime
+        +Time CloseTime
+        +int SeatRows
+        +int SeatCols
+    }
+
+    class Seat {
+        +int64 ID
+        +int64 RoomID
+        +string SeatNo
+        +int RowNo
+        +int ColNo
+        +string Zone
+        +bool HasPower
+        +bool NearWindow
+        +string Status
+    }
+
+    class Reservation {
+        +int64 ID
+        +int64 UserID
+        +int64 SeatID
+        +Date ResDate
+        +Time StartTime
+        +Time EndTime
+        +string Status
+        +string Source
+        +Time CheckinAt
+        +Time LeaveAt
+        +Time CheckoutAt
+    }
+
+    class CreditLog {
+        +int64 ID
+        +int64 UserID
+        +int Delta
+        +string Reason
+        +int64 ReservationID
+    }
+
+    class WaitlistEntry {
+        +int64 ID
+        +int64 UserID
+        +int64 RoomID
+        +Date ResDate
+        +Time StartTime
+        +Time EndTime
+        +string Zone
+        +bool HasPower
+        +bool NearWindow
+        +string Status
+    }
+
+    class Notification {
+        +int64 ID
+        +int64 UserID
+        +string Type
+        +string Title
+        +string Content
+        +bool IsRead
+    }
+
+    class AuthService {
+        +Register(req) UserPublic
+        +Login(req) LoginResponse
+        +ParseToken(token) Claims
+    }
+
+    class ReservationService {
+        +CreateWithSource(uid, req, source) View
+        +Cancel(uid, id)
+        +ListMine(uid) View[]
+    }
+
+    class AllocationService {
+        +AutoAllocate(uid, req) Response
+        +ScoreCandidates(cands, req) ScoredSeat$
+    }
+
+    class LifecycleService {
+        +Checkin(uid, id)
+        +Leave(uid, id)
+        +ReturnBack(uid, id)
+        +Checkout(uid, id)
+        +Tick(ctx) int, int, int
+    }
+
+    class CreditService {
+        +OnViolation(res)
+        +OnComplete(res)
+        +ApplyLateCancel(res)
+        +GetOverview(uid)
+    }
+
+    class WaitlistService {
+        +Join(uid, req) View
+        +Cancel(uid, id)
+        +PromoteTick(ctx) int
+    }
+
+    class NotificationService {
+        +Push(uid, type, title, content)
+        +List(uid)
+        +MarkAllRead(uid)
+    }
+
+    User "1" --> "*" Reservation : 发起
+    Seat "1" --> "*" Reservation : 被预约
+    Room "1" --> "*" Seat : 包含
+    User "1" --> "*" CreditLog : 产生
+    User "1" --> "*" WaitlistEntry : 排队
+    Room "1" --> "*" WaitlistEntry : 面向
+    User "1" --> "*" Notification : 接收
+
+    AuthService ..> User : 管理
+    ReservationService ..> Reservation : 管理
+    AllocationService ..> ReservationService : 调用
+    LifecycleService ..> Reservation : 状态迁移
+    CreditService ..> CreditLog : 写入
+    WaitlistService ..> ReservationService : 递补下单
+    NotificationService ..> Notification : 写入
+    CreditService ..|> LifecycleHooks : 实现
+    NotificationService ..|> LifecycleHooks : 实现
