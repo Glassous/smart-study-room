@@ -42,6 +42,18 @@ const routes = [
         name: 'analytics',
         component: () => import('../views/AnalyticsView.vue'),
         meta: { title: '热力图与统计', requiresAuth: true }
+      },
+      {
+        path: '/notifications',
+        name: 'notifications',
+        component: () => import('../views/NotificationsView.vue'),
+        meta: { title: '消息中心', requiresAuth: true }
+      },
+      {
+        path: '/profile',
+        name: 'profile',
+        component: () => import('../views/ProfileView.vue'),
+        meta: { title: '个人中心', requiresAuth: true }
       }
     ]
   }
