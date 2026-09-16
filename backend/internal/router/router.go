@@ -51,6 +51,7 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 	credit := handler.NewCreditHandler(creditService)
 	notify := handler.NewNotificationHandler(notificationService)
 	waitlist := handler.NewWaitlistHandler(waitlistService)
+	adminUser := handler.NewAdminUserHandler(userRepo)
 	stats := handler.NewStatsHandler(statsService)
 
 	api := r.Group("/api")
@@ -111,6 +112,8 @@ func Setup(pool *pgxpool.Pool, cfg *config.Config) (*gin.Engine, *service.Schedu
 			adminGroup.POST("/rooms/:id/seats/batch", adminRoom.BatchGenSeats)
 			adminGroup.PUT("/seats/:id", adminRoom.UpdateSeat)
 			adminGroup.DELETE("/seats/:id", adminRoom.DeleteSeat)
+			adminGroup.GET("/users", adminUser.ListUsers)
+			adminGroup.PUT("/users/:id/status", adminUser.SetUserStatus)
 		}
 	}
 
