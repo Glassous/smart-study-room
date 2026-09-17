@@ -1,6 +1,12 @@
 # 智能共享自习室预约系统（Smart Study Room）
 
-> 系统分析与设计课程设计项目 —— 面向高校共享自习室场景的座位预约与管理平台。
+![CI](https://github.com/imicola/smart-study-room/actions/workflows/ci.yml/badge.svg)
+![Go](https://img.shields.io/badge/backend-Go%201.27%20%2B%20Gin-00ADD8)
+![Vue](https://img.shields.io/badge/frontend-Vue%203%20%2B%20Vite-42b883)
+![PostgreSQL](https://img.shields.io/badge/db-PostgreSQL%2018-336791)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+> 《系统分析与设计》课程设计 —— 面向高校共享自习室场景的座位预约与管理平台。
 
 ## 项目简介
 
@@ -65,10 +71,22 @@ npm run dev            # 默认 http://localhost:5173
 ```
 backend/    Go 后端（handler / service / repository 分层）
 frontend/   Vue 3 前端
-docs/       课程设计文档
-diagrams/   系统分析设计图（Mermaid）
+docs/       课程设计文档（报告/需求/概要/详细/进度日志，共 1.6 万字）
+diagrams/   系统分析设计图（Mermaid × 16：用例/架构/ER/类图/状态/时序/DFD 等）
 scripts/    数据库与运维脚本
 ```
+
+## 课程设计文档索引
+
+| 文档 | 内容 |
+| --- | --- |
+| [01_课程设计报告](docs/01_课程设计报告.md) | 前言/系统概述/系统分析/系统设计/系统实现/收获体会 |
+| [02_需求规格说明书](docs/02_需求规格说明书.md) | 数据字典、FR-01~10、非功能需求 |
+| [03_概要设计说明书](docs/03_概要设计说明书.md) | 四层架构、接口设计、ER/物理结构 |
+| [04_详细设计说明书](docs/04_详细设计说明书.md) | 逐模块十要素、算法与测试要点 |
+| [05_开发进度日志](docs/05_开发进度日志.md) | 28 项活动记录与工时统计 |
+
+文档中的 `【插图位置】` 标记与 `diagrams/` 下 Mermaid 文件一一对应，终稿排版时渲染插入。
 
 ## 小组分工
 
